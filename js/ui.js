@@ -344,6 +344,9 @@ export class UIController {
   invalidateUI() {
     this.lastDockKey = null;
     this.lastInspectorKey = null;
+    if (this.modalCodex && this.modalCodex.open) {
+      this.filterCodex();
+    }
   }
 
   getDockKey() {
@@ -636,11 +639,28 @@ export class UIController {
     const filter = activeFilterBtn ? activeFilterBtn.dataset.tier : 'All';
     const query = this.codexSearch ? this.codexSearch.value.toLowerCase().trim() : '';
 
-    const allGems = this.game ? this.game.getAllGems() : [];
-    const ownedCodes = {};
-    for (const g of allGems) {
-      const code = g.isSpecial ? g.specialName : `${g.code}${g.level}`;
-      ownedCodes[code] = (ownedCodes[code] || 0) + 1;
+    const builtCodes = {};
+    const turnCodes = {};
+
+    if (this.game) {
+      // 1. Placed this turn (turn options)
+      for (const t of this.game.placedGemsThisTurn) {
+        if (t && !t.isSlate) {
+          const code = t.isSpecial ? t.specialName : `${t.code}${t.level}`;
+          turnCodes[code] = (turnCodes[code] || 0) + 1;
+        }
+      }
+
+      // 2. Already built towers on board (excluding current unconfirmed placed gems)
+      for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
+        for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
+          const tower = this.game.towerGrid[y][x];
+          if (tower && !tower.isSlate && !this.game.placedGemsThisTurn.includes(tower)) {
+            const code = tower.isSpecial ? tower.specialName : `${tower.code}${tower.level}`;
+            builtCodes[code] = (builtCodes[code] || 0) + 1;
+          }
+        }
+      }
     }
 
     const filtered = Object.entries(SPECIAL_TOWERS).filter(([name, def]) => {
@@ -650,23 +670,34 @@ export class UIController {
     });
 
     this.codexList.innerHTML = filtered.map(([name, def]) => {
-      // Check recipe satisfaction
+      const poolBuilt = { ...builtCodes };
+      const poolTurn = { ...turnCodes };
+
+      const recipeBadges = def.recipe.map(r => {
+        if ((poolBuilt[r] || 0) > 0) {
+          poolBuilt[r]--;
+          return `<span class="recipe-ingredient built" title="Already built on board">✓ ${r} (Built)</span>`;
+        } else if ((poolTurn[r] || 0) > 0) {
+          poolTurn[r]--;
+          return `<span class="recipe-ingredient turn-option" title="Placed in current turn">⭐ ${r} (Turn Option)</span>`;
+        } else {
+          return `<span class="recipe-ingredient missing" title="Missing ingredient">${r}</span>`;
+        }
+      }).join(' <span class="recipe-plus">+</span> ');
+
+      // Total needed counts
       const reqCounts = {};
       for (const r of def.recipe) {
         reqCounts[r] = (reqCounts[r] || 0) + 1;
       }
       let canCraft = true;
       for (const [r, needed] of Object.entries(reqCounts)) {
-        if ((ownedCodes[r] || 0) < needed) {
+        const total = (builtCodes[r] || 0) + (turnCodes[r] || 0);
+        if (total < needed) {
           canCraft = false;
           break;
         }
       }
-
-      const recipeBadges = def.recipe.map(r => {
-        const has = (ownedCodes[r] || 0) > 0;
-        return `<span class="recipe-ingredient ${has ? 'has' : ''}">${r}</span>`;
-      }).join(' + ');
 
       return `
         <div class="codex-card ${canCraft ? 'can-craft' : ''}">
