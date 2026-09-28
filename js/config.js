@@ -14,7 +14,7 @@ export const CONFIG = {
   ],
 
   STARTING_LIVES: 50,
-  STARTING_GOLD: 10,
+  STARTING_GOLD: 60,
   GEMS_PER_ROUND: 5,
   CREEPS_PER_WAVE: 10,
   SPAWN_INTERVAL_MS: 900,
@@ -23,8 +23,8 @@ export const CONFIG = {
   SLATE_REMOVE_COST: 15,
   REROLL_COST: 20,
   DOWNGRADE_COST: 10,
-  MOVE_TOWER_COST: 40,
-  HEAL_CASTLE_COST: 75,
+  MOVE_TOWER_COST: 30,
+  HEAL_CASTLE_COST: 60,
   HEAL_CASTLE_AMOUNT: 10,
   MAX_TOWER_RUNES: 3,
 
@@ -42,7 +42,7 @@ export const TRAP_TYPES = {
   spike: {
     id: 'spike',
     name: 'Caltrop Spikes',
-    cost: 25,
+    cost: 20,
     icon: '🗡️',
     color: '#f87171',
     glow: '#ef4444',
@@ -56,7 +56,7 @@ export const TRAP_TYPES = {
   frost: {
     id: 'frost',
     name: 'Frost Sigil',
-    cost: 35,
+    cost: 30,
     icon: '❄️',
     color: '#38bdf8',
     glow: '#0284c7',
@@ -70,7 +70,7 @@ export const TRAP_TYPES = {
   explosive: {
     id: 'explosive',
     name: 'Explosive Mine',
-    cost: 50,
+    cost: 45,
     icon: '💣',
     color: '#fb923c',
     glow: '#ea580c',
@@ -84,7 +84,7 @@ export const TRAP_TYPES = {
   tar: {
     id: 'tar',
     name: 'Acid Tar Trap',
-    cost: 35,
+    cost: 30,
     icon: '🧪',
     color: '#a855f7',
     glow: '#7e22ce',
@@ -99,7 +99,7 @@ export const TRAP_TYPES = {
   stun: {
     id: 'stun',
     name: 'Arcane Snare',
-    cost: 45,
+    cost: 40,
     icon: '⚡',
     color: '#fbbf24',
     glow: '#d97706',
@@ -115,7 +115,7 @@ export const RUNE_TYPES = {
   haste: {
     id: 'haste',
     name: 'Rune of Swiftness',
-    cost: 60,
+    cost: 45,
     icon: '⚡',
     color: '#38bdf8',
     speedBonus: 0.35,
@@ -124,7 +124,7 @@ export const RUNE_TYPES = {
   ferocity: {
     id: 'ferocity',
     name: 'Rune of Ferocity',
-    cost: 75,
+    cost: 60,
     icon: '🔥',
     color: '#f87171',
     damageBonus: 0.40,
@@ -135,7 +135,7 @@ export const RUNE_TYPES = {
   range: {
     id: 'range',
     name: 'Rune of Eagle Eye',
-    cost: 50,
+    cost: 40,
     icon: '🎯',
     color: '#34d399',
     rangeBonus: 50,
@@ -145,7 +145,7 @@ export const RUNE_TYPES = {
   frost: {
     id: 'frost',
     name: 'Rune of Glaciation',
-    cost: 65,
+    cost: 50,
     icon: '❄️',
     color: '#67e8f9',
     slowPercent: 0.35,
@@ -155,7 +155,7 @@ export const RUNE_TYPES = {
   venom: {
     id: 'venom',
     name: 'Rune of Venom',
-    cost: 70,
+    cost: 55,
     icon: '🧪',
     color: '#4ade80',
     poisonDps: 180,
@@ -165,7 +165,7 @@ export const RUNE_TYPES = {
   midas: {
     id: 'midas',
     name: 'Rune of Midas',
-    cost: 90,
+    cost: 70,
     icon: '🪙',
     color: '#fbbf24',
     bonusGoldChance: 0.25,

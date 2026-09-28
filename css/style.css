@@ -1167,6 +1167,98 @@ body {
   font-weight: 700;
 }
 
+.shop-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.shop-card-actions .game-btn.secondary {
+  font-size: 10px;
+  padding: 4px 8px;
+  color: #94a3b8;
+  border-color: rgba(71, 85, 105, 0.5);
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.shop-card-actions .game-btn.secondary:hover:not(:disabled) {
+  color: #fff;
+  border-color: var(--primary);
+  background: #1e293b;
+}
+
+.shop-target-banner {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95));
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+}
+
+.shop-target-banner.ready {
+  border-color: #38bdf8;
+}
+
+.shop-target-banner.full {
+  border-color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.shop-target-banner.empty {
+  border-color: rgba(71, 85, 105, 0.5);
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.shop-target-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.shop-target-icon {
+  font-size: 20px;
+}
+
+.shop-target-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.shop-target-title strong {
+  color: #38bdf8;
+}
+
+.shop-target-sub {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.shop-target-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.shop-target-badge.ready {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+.shop-target-badge.full {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
 #codex-search {
   background: #0f172a;
   border: 1px solid var(--border-color);

@@ -125,13 +125,7 @@ export class UIController {
     [this.modalShop, this.modalCodex, this.modalHelp, this.modalGameOver, this.modalVictory].forEach(dialog => {
       if (dialog) {
         dialog.addEventListener('click', (e) => {
-          const rect = dialog.getBoundingClientRect();
-          if (
-            e.clientX < rect.left ||
-            e.clientX > rect.right ||
-            e.clientY < rect.top ||
-            e.clientY > rect.bottom
-          ) {
+          if (e.target === dialog) {
             dialog.close();
           }
         });
@@ -216,8 +210,10 @@ export class UIController {
     }
   }
 
-  onCanvasMouseMove(e) {
+  getTileAtEvent(e) {
+    if (!this.renderer || !this.renderer.canvas) return null;
     const rect = this.renderer.canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
     const scaleX = this.renderer.canvas.width / rect.width;
     const scaleY = this.renderer.canvas.height / rect.height;
 
@@ -228,17 +224,22 @@ export class UIController {
     const ty = Math.floor(my / this.renderer.tileSize);
 
     if (tx >= 0 && tx < CONFIG.GRID_WIDTH && ty >= 0 && ty < CONFIG.GRID_HEIGHT) {
-      this.game.hoverTile = { x: tx, y: ty };
-    } else {
-      this.game.hoverTile = null;
+      return { x: tx, y: ty };
     }
+    return null;
+  }
+
+  onCanvasMouseMove(e) {
+    this.game.hoverTile = this.getTileAtEvent(e);
   }
 
   onCanvasClick(e) {
     SOUND.ensureContext();
-    if (!this.game.hoverTile) return;
+    const tile = this.getTileAtEvent(e) || this.game.hoverTile;
+    if (!tile) return;
+    this.game.hoverTile = tile;
 
-    const { x, y } = this.game.hoverTile;
+    const { x, y } = tile;
     const clickedTower = this.game.towerGrid[y][x];
 
     // Handle special interaction modes (Move Tower, Place Trap, Socket Rune)
@@ -246,7 +247,7 @@ export class UIController {
       const mode = this.game.interactionMode;
       if (mode.type === 'MOVE_TOWER') {
         if (!mode.sourceTower) {
-          if (clickedTower && !clickedTower.isSlate) {
+          if (clickedTower && !clickedTower.isSlate && !this.game.placedGemsThisTurn.includes(clickedTower)) {
             mode.sourceTower = clickedTower;
             this.game.selectedTower = clickedTower;
             SOUND.playClick();
@@ -269,7 +270,7 @@ export class UIController {
           SOUND.playError();
         }
       } else if (mode.type === 'SOCKET_RUNE') {
-        if (clickedTower && !clickedTower.isSlate && clickedTower.canSocketRune()) {
+        if (clickedTower && !clickedTower.isSlate && !this.game.placedGemsThisTurn.includes(clickedTower) && clickedTower.canSocketRune()) {
           this.game.socketRuneToTower(clickedTower, mode.runeKey);
           this.game.interactionMode = null;
         } else {
@@ -425,7 +426,7 @@ export class UIController {
       return;
     }
 
-    const addRuneBtn = e.target.closest('#btn-inspector-add-rune');
+    const addRuneBtn = e.target.closest('#btn-inspector-add-rune') || e.target.closest('.rune-pill-empty');
     if (addRuneBtn) {
       e.preventDefault();
       this.openShop('runes');
@@ -451,12 +452,15 @@ export class UIController {
     SOUND.ensureContext();
     const action = buyBtn.dataset.action;
 
+    const targetTower = this.game.selectedTower;
+    const hasValidTarget = targetTower && !targetTower.isSlate && !this.game.placedGemsThisTurn.includes(targetTower);
+
     if (action === 'relocate') {
       if (this.game.gold < CONFIG.MOVE_TOWER_COST) {
         SOUND.playError();
         return;
       }
-      const src = (this.game.selectedTower && !this.game.selectedTower.isSlate) ? this.game.selectedTower : null;
+      const src = (buyBtn.dataset.mode !== 'pick' && hasValidTarget) ? targetTower : null;
       this.game.interactionMode = { type: 'MOVE_TOWER', sourceTower: src };
       this.modalShop.close();
       this.invalidateUI();
@@ -477,6 +481,17 @@ export class UIController {
         SOUND.playError();
         return;
       }
+
+      // If user clicked direct socket and we have a valid target tower with available slots:
+      if (buyBtn.dataset.mode !== 'pick' && hasValidTarget && targetTower.canSocketRune()) {
+        if (this.game.socketRuneToTower(targetTower, runeId)) {
+          this.renderShop(this.activeShopTab);
+          this.invalidateUI();
+          return;
+        }
+      }
+
+      // Otherwise enter board pick mode
       this.game.interactionMode = { type: 'SOCKET_RUNE', runeKey: runeId };
       this.modalShop.close();
       this.invalidateUI();
@@ -734,7 +749,8 @@ export class UIController {
     // Active Gem or Special Tower
     const q = QUALITIES[t.level];
     const tierBadge = t.isSpecial ? `<span class="badge special">${t.tier}</span>` : `<span class="badge tier" style="background: ${q ? q.border : '#334155'}">${q ? q.namePrefix : ''}</span>`;
-    const isUnconfirmedGem = this.game.phase === GAME_PHASES.CHOOSING && this.game.placedGemsThisTurn.includes(t);
+    const isTempGem = this.game.placedGemsThisTurn.includes(t);
+    const isUnconfirmedGem = this.game.phase === GAME_PHASES.CHOOSING && isTempGem;
     const unconfirmedIdx = isUnconfirmedGem ? this.game.placedGemsThisTurn.indexOf(t) : -1;
 
     const combinations = this.game.getCombinationsForTower(t);
@@ -784,7 +800,7 @@ export class UIController {
     let runesHtml = '';
     let relocateHtml = '';
 
-    if (!isUnconfirmedGem) {
+    if (!isTempGem) {
       const runes = t.runes || [];
       const runePills = runes.map((runeKey) => {
         const rDef = RUNE_TYPES[runeKey];
@@ -1014,10 +1030,30 @@ export class UIController {
 
     let itemsHtml = '';
     const gold = this.game.gold;
+    const targetTower = this.game.selectedTower;
+    const hasValidTarget = targetTower && !targetTower.isSlate && !this.game.placedGemsThisTurn.includes(targetTower);
 
     // 1. Relocation Card
     if (tab === 'all' || tab === 'relocate') {
       const canAfford = gold >= CONFIG.MOVE_TOWER_COST;
+      let relocateBtnHtml = '';
+      if (hasValidTarget) {
+        relocateBtnHtml = `
+          <button type="button" class="game-btn primary shop-buy-btn" data-action="relocate" ${canAfford ? '' : 'disabled'}>
+            ${canAfford ? `🔀 Relocate ${targetTower.name}` : `Need ${CONFIG.MOVE_TOWER_COST} Gold (Have ${gold}G)`}
+          </button>
+          <button type="button" class="game-btn secondary shop-buy-btn" data-action="relocate" data-mode="pick" ${canAfford ? '' : 'disabled'}>
+            🎯 Pick Another Tower
+          </button>
+        `;
+      } else {
+        relocateBtnHtml = `
+          <button type="button" class="game-btn primary shop-buy-btn" data-action="relocate" data-mode="pick" ${canAfford ? '' : 'disabled'}>
+            ${canAfford ? '🔀 Relocate (Pick on Board)' : `Need ${CONFIG.MOVE_TOWER_COST} Gold (Have ${gold}G)`}
+          </button>
+        `;
+      }
+
       itemsHtml += `
         <div class="shop-card ${canAfford ? 'featured' : ''}">
           <div class="shop-card-header">
@@ -1032,9 +1068,9 @@ export class UIController {
           </div>
           <p class="shop-card-desc">Move an active tower to a new tile. Swap with any Rock Slate (100% pathing safe), or move to empty space (leaves a barrier rock in old spot to keep your maze intact).</p>
           <div class="shop-card-stats">Pathing Protected • Maze Maintained</div>
-          <button type="button" class="game-btn primary shop-buy-btn" data-action="relocate" ${canAfford ? '' : 'disabled'}>
-            Relocate Tower
-          </button>
+          <div class="shop-card-actions">
+            ${relocateBtnHtml}
+          </div>
         </div>
       `;
     }
@@ -1058,9 +1094,11 @@ export class UIController {
             </div>
             <p class="shop-card-desc">${def.description}</p>
             <div class="shop-card-stats">Radius: ${def.effectRadius}px • ${effectDetail}</div>
-            <button type="button" class="game-btn primary shop-buy-btn" data-action="trap" data-trap-id="${key}" ${canAfford ? '' : 'disabled'}>
-              Deploy Trap
-            </button>
+            <div class="shop-card-actions">
+              <button type="button" class="game-btn primary shop-buy-btn" data-action="trap" data-trap-id="${key}" ${canAfford ? '' : 'disabled'}>
+                ${canAfford ? '💣 Deploy Trap' : `Need ${def.cost} Gold (Have ${gold}G)`}
+              </button>
+            </div>
           </div>
         `;
       }
@@ -1068,8 +1106,75 @@ export class UIController {
 
     // 3. Runes Cards
     if (tab === 'all' || tab === 'runes') {
+      // Target tower banner at top of runes
+      if (hasValidTarget) {
+        const canSlot = targetTower.canSocketRune();
+        const runesCount = targetTower.runes ? targetTower.runes.length : 0;
+        itemsHtml += `
+          <div class="shop-target-banner ${canSlot ? 'ready' : 'full'}">
+            <div class="shop-target-left">
+              <span class="shop-target-icon">🎯</span>
+              <div class="shop-target-text">
+                <div class="shop-target-title">Target Tower: <strong>${targetTower.name}</strong></div>
+                <div class="shop-target-sub">Socketed Runes: <strong>${runesCount} / ${CONFIG.MAX_TOWER_RUNES}</strong></div>
+              </div>
+            </div>
+            ${canSlot ? '<span class="shop-target-badge ready">Ready to Socket</span>' : '<span class="shop-target-badge full">Slots Full (3/3)</span>'}
+          </div>
+        `;
+      } else {
+        itemsHtml += `
+          <div class="shop-target-banner empty">
+            <div class="shop-target-left">
+              <span class="shop-target-icon">💡</span>
+              <div class="shop-target-text">
+                <div class="shop-target-title">Targeting: Board Selection Mode</div>
+                <div class="shop-target-sub">Click any rune below to pick a tower on the grid, or select a tower first to socket directly!</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
       for (const [key, def] of Object.entries(RUNE_TYPES)) {
         const canAfford = gold >= def.cost;
+        const targetCanSlot = hasValidTarget && targetTower.canSocketRune();
+
+        let actionBtnHtml = '';
+        if (hasValidTarget) {
+          if (!targetCanSlot) {
+            actionBtnHtml = `
+              <button type="button" class="game-btn primary shop-buy-btn" disabled>
+                Tower Slots Full (3/3)
+              </button>
+              <button type="button" class="game-btn secondary shop-buy-btn" data-action="rune" data-rune-id="${key}" data-mode="pick" ${canAfford ? '' : 'disabled'}>
+                🎯 Target on Grid
+              </button>
+            `;
+          } else if (!canAfford) {
+            actionBtnHtml = `
+              <button type="button" class="game-btn primary shop-buy-btn" disabled>
+                Need ${def.cost} Gold (Have ${gold}G)
+              </button>
+            `;
+          } else {
+            actionBtnHtml = `
+              <button type="button" class="game-btn primary shop-buy-btn" data-action="rune" data-rune-id="${key}">
+                ✨ Socket into ${targetTower.name}
+              </button>
+              <button type="button" class="game-btn secondary shop-buy-btn" data-action="rune" data-rune-id="${key}" data-mode="pick">
+                🎯 Target on Grid
+              </button>
+            `;
+          }
+        } else {
+          actionBtnHtml = `
+            <button type="button" class="game-btn primary shop-buy-btn" data-action="rune" data-rune-id="${key}" data-mode="pick" ${canAfford ? '' : 'disabled'}>
+              ${canAfford ? '🎯 Socket (Pick on Board)' : `Need ${def.cost} Gold (Have ${gold}G)`}
+            </button>
+          `;
+        }
+
         itemsHtml += `
           <div class="shop-card ${canAfford ? 'featured' : ''}">
             <div class="shop-card-header">
@@ -1084,9 +1189,9 @@ export class UIController {
             </div>
             <p class="shop-card-desc">${def.description}</p>
             <div class="shop-card-stats">Socket Max: ${CONFIG.MAX_TOWER_RUNES} Runes / Tower</div>
-            <button type="button" class="game-btn primary shop-buy-btn" data-action="rune" data-rune-id="${key}" ${canAfford ? '' : 'disabled'}>
-              Socket Rune
-            </button>
+            <div class="shop-card-actions">
+              ${actionBtnHtml}
+            </div>
           </div>
         `;
       }
@@ -1109,9 +1214,11 @@ export class UIController {
           </div>
           <p class="shop-card-desc">Repair and reinforce the Gem Castle to restore +${CONFIG.HEAL_CASTLE_AMOUNT} lives! Current castle lives: <strong>${this.game.lives}</strong>. Crucial for surviving high waves and boss leaks.</p>
           <div class="shop-card-stats">Instant Castle Health Recovery</div>
-          <button type="button" class="game-btn success shop-buy-btn" data-action="heal" ${canAfford ? '' : 'disabled'}>
-            Repair Castle (+${CONFIG.HEAL_CASTLE_AMOUNT} Lives)
-          </button>
+          <div class="shop-card-actions">
+            <button type="button" class="game-btn success shop-buy-btn" data-action="heal" ${canAfford ? '' : 'disabled'}>
+              ${canAfford ? `Repair Castle (+${CONFIG.HEAL_CASTLE_AMOUNT} Lives)` : `Need ${CONFIG.HEAL_CASTLE_COST} Gold (Have ${gold}G)`}
+            </button>
+          </div>
         </div>
       `;
     }
