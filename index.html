@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gem TD - Strategic Tower Defense</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><polygon points='50,5 95,35 75,95 25,95 5,35' fill='%2338bdf8' stroke='%230284c7' stroke-width='6'/></svg>">
+</head>
+<body>
+  <div id="game-app">
+    <!-- Top HUD Navigation -->
+    <header id="game-header">
+      <div class="header-left">
+        <div class="logo">
+          <span class="gem-icon">💎</span>
+          <h1>GEM TD</h1>
+        </div>
+        <div class="wave-info-box">
+          <div id="hud-wave" class="hud-main-val">Wave 1 / 50</div>
+          <div id="hud-wave-name" class="hud-sub-val">Frenzied Pig • 10 creeps</div>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <div id="phase-banner" class="phase-banner">
+          <span class="badge build">BUILDING</span> Place 5 Gems on the Maze (0 / 5 placed)
+        </div>
+      </div>
+
+      <div class="header-right">
+        <div class="stat-pill lives">
+          <span class="icon">❤️</span>
+          <span id="hud-lives" class="val">50</span>
+        </div>
+        <div class="stat-pill gold">
+          <span class="icon">🪙</span>
+          <span id="hud-gold" class="val">10</span>
+        </div>
+        <div class="stat-pill score">
+          <span class="icon">🏆</span>
+          <span id="hud-score" class="val">0</span>
+        </div>
+
+        <div class="control-group">
+          <div class="speed-controls">
+            <button class="speed-btn active" data-speed="1" title="Normal Speed (1)">1x</button>
+            <button class="speed-btn" data-speed="2" title="Fast Speed (2)">2x</button>
+            <button class="speed-btn" data-speed="4" title="Ultra Fast Speed (3)">4x</button>
+            <button class="speed-btn" data-speed="0" title="Pause Game (Space)">⏸</button>
+          </div>
+          <button id="btn-sound" class="icon-btn active" title="Toggle Sound">🔊 Sound: On</button>
+          <button id="btn-codex" class="icon-btn codex-btn" title="Recipe Codex (C)">📖 Recipes</button>
+          <button id="btn-help" class="icon-btn" title="How to Play">❓ Guide</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Game Board Container -->
+    <main id="game-main">
+      <div id="canvas-container">
+        <canvas id="game-canvas"></canvas>
+      </div>
+
+      <!-- Right Side Inspector Panel -->
+      <aside id="inspector-panel" class="side-panel">
+        <div class="empty-inspector">
+          <p>Click any tower, gem, or slate to inspect stats, range, and abilities.</p>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Bottom Action Dock -->
+    <footer id="bottom-dock">
+      <!-- Injected dynamically by UIController -->
+    </footer>
+  </div>
+
+  <!-- Recipe Codex Modal -->
+  <dialog id="modal-codex" class="game-dialog">
+    <div class="dialog-header">
+      <div class="dialog-title">
+        <span class="icon">📖</span>
+        <h2>Gem Combination Recipes Codex</h2>
+      </div>
+      <button class="modal-close" aria-label="Close dialog">&times;</button>
+    </div>
+    <div class="dialog-controls">
+      <div class="filter-tabs">
+        <button class="codex-filter-btn active" data-tier="All">All</button>
+        <button class="codex-filter-btn" data-tier="Basic">Basic</button>
+        <button class="codex-filter-btn" data-tier="Intermediate">Intermediate</button>
+        <button class="codex-filter-btn" data-tier="Advanced">Advanced</button>
+        <button class="codex-filter-btn" data-tier="Mythic">Mythic</button>
+        <button class="codex-filter-btn" data-tier="Top">Top Tier</button>
+      </div>
+      <input type="text" id="codex-search" placeholder="Search towers or abilities..." />
+    </div>
+    <div id="codex-list" class="dialog-scroll-content">
+      <!-- Injected dynamically -->
+    </div>
+  </dialog>
+
+  <!-- How to Play Guide Modal -->
+  <dialog id="modal-help" class="game-dialog">
+    <div class="dialog-header">
+      <div class="dialog-title">
+        <span class="icon">❓</span>
+        <h2>How to Play Gem TD</h2>
+      </div>
+      <button class="modal-close" aria-label="Close dialog">&times;</button>
+    </div>
+    <div class="dialog-scroll-content guide-content">
+      <section>
+        <h3>🎯 The Goal</h3>
+        <p>Defend the <strong>Gem Castle</strong> at the center from 50 waves of invaders. If 50 creeps reach the castle, you lose!</p>
+      </section>
+
+      <section>
+        <h3>🗺️ Checkpoints & Mazing</h3>
+        <p>Ground enemies spawn at <strong>WP 0 (Top-Left)</strong> and must run sequentially to <strong>WP 1 (Top-Right)</strong>, <strong>WP 2 (Bottom-Right)</strong>, <strong>WP 3 (Bottom-Left)</strong>, and finally into the <strong>Gem Castle (Center)</strong>.</p>
+        <p>Create a winding labyrinth of stone slates to maximize the walking distance for creeps so your towers can shoot them repeatedly!</p>
+        <p><em>Note: Flying creeps ignore walls and fly directly between waypoints!</em></p>
+      </section>
+
+      <section>
+        <h3>💎 The 5-Gem Round Cycle</h3>
+        <ol>
+          <li><strong>Building Phase:</strong> Place 5 random gems on the grid.</li>
+          <li><strong>Choosing Phase:</strong> Select <strong>1 Gem</strong> to keep as your permanent active tower. The other 4 gems turn into solid <strong>Rock Slates</strong> that block enemy pathing!</li>
+          <li><strong>Special Tower Combos:</strong> If the gems on your board satisfy any recipe in the <strong>Recipe Codex</strong>, you can combine them into legendary Special Towers!</li>
+          <li><strong>Duplicate Combines:</strong> 2 identical gems of the same tier combine into Tier+1; 4 identical gems combine into Tier+2.</li>
+          <li><strong>Wave Phase:</strong> Enemies spawn and your active towers automatically attack them.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h3>⭐ Upgrades & Economy</h3>
+        <ul>
+          <li><strong>Upgrade Chances:</strong> Spend gold to increase the probability of rolling higher tier gems (Chipped &rarr; Flawed &rarr; Regular &rarr; Flawless &rarr; Perfect).</li>
+          <li><strong>Demolish Slates:</strong> Pay 15 Gold to remove unwanted rocks and adjust your maze paths.</li>
+          <li><strong>Reroll:</strong> Spend 20 Gold in Choosing Phase to re-roll all 5 placed gems.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h3>⌨️ Hotkeys</h3>
+        <p><strong>Space:</strong> Pause/Resume • <strong>1 / 2 / 3:</strong> Game Speed (1x, 2x, 4x) • <strong>C:</strong> Recipe Codex</p>
+      </section>
+    </div>
+  </dialog>
+
+  <!-- Game Over Modal -->
+  <dialog id="modal-gameover" class="game-dialog end-game-dialog">
+    <div class="dialog-header">
+      <h2>💀 Defeat!</h2>
+    </div>
+    <div class="dialog-content text-center">
+      <p class="summary-line">The Gem Castle has fallen to the hordes!</p>
+      <div class="stats-summary">
+        <div>Wave Reached: <strong id="go-wave">1</strong> / 50</div>
+        <div>Final Score: <strong id="go-score">0</strong></div>
+      </div>
+      <button class="game-btn primary restart-game-btn">Play Again</button>
+    </div>
+  </dialog>
+
+  <!-- Victory Modal -->
+  <dialog id="modal-victory" class="game-dialog end-game-dialog victory">
+    <div class="dialog-header">
+      <h2>👑 VICTORY!</h2>
+    </div>
+    <div class="dialog-content text-center">
+      <p class="summary-line">You vanquished Baby Roshan and conquered all 50 waves of Gem TD!</p>
+      <div class="stats-summary">
+        <div>Final Score: <strong id="vic-score">0</strong></div>
+      </div>
+      <button class="game-btn primary restart-game-btn">Play Again</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
