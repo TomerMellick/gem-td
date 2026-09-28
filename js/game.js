@@ -1,6 +1,6 @@
 // Gem TD - Main Game State Machine & Logic Controller
 import { CONFIG, QUALITIES, BASE_GEMS, WAVES } from './config.js';
-import { SPECIAL_TOWERS, findMatchingRecipes, findDuplicateUpgrades } from './recipes.js';
+import { SPECIAL_TOWERS, findMatchingRecipes, findDuplicateUpgrades, findCombinationsForTower } from './recipes.js';
 import { Pathfinding, TILE_TYPES } from './pathfinding.js';
 import { Creep, Tower, FloatingText, Particle } from './entities.js';
 import { SOUND } from './audio.js';
@@ -220,11 +220,11 @@ export class Game {
       targetY = consumedTowers[0].tileY;
     }
 
-    // Remove consumed towers (except the target tile where the special tower will sit)
+    // Turn consumed partner towers into rock slates (except the target tile where the special tower will sit)
     for (const t of consumedTowers) {
       if (t.tileX === targetX && t.tileY === targetY) continue;
-      this.towerGrid[t.tileY][t.tileX] = null;
-      this.grid[t.tileY][t.tileX] = TILE_TYPES.EMPTY;
+      t.turnIntoSlate();
+      this.grid[t.tileY][t.tileX] = TILE_TYPES.SLATE;
     }
 
     // Create the Special Tower at the target location
@@ -236,7 +236,7 @@ export class Game {
     // Any remaining unconfirmed gems this turn become slates
     if (this.phase === GAME_PHASES.CHOOSING || this.phase === GAME_PHASES.BUILDING) {
       for (const t of this.placedGemsThisTurn) {
-        if (t !== specialTower && this.towerGrid[t.tileY][t.tileX] === t) {
+        if (t !== specialTower && !consumedTowers.includes(t) && this.towerGrid[t.tileY][t.tileX] === t) {
           t.turnIntoSlate();
           this.grid[t.tileY][t.tileX] = TILE_TYPES.SLATE;
         }
@@ -263,9 +263,10 @@ export class Game {
     const keepTower = gems[0];
     const consumed = gems.slice(1);
 
+    // Turn duplicate partner towers into rock slates
     for (const t of consumed) {
-      this.towerGrid[t.tileY][t.tileX] = null;
-      this.grid[t.tileY][t.tileX] = TILE_TYPES.EMPTY;
+      t.turnIntoSlate();
+      this.grid[t.tileY][t.tileX] = TILE_TYPES.SLATE;
     }
 
     keepTower.initFromData({ code: gemCode, level: targetLevel });
@@ -274,7 +275,7 @@ export class Game {
     // Remaining placed gems become slates if in choosing phase
     if (this.phase === GAME_PHASES.CHOOSING) {
       for (const t of this.placedGemsThisTurn) {
-        if (t !== keepTower && this.towerGrid[t.tileY][t.tileX] === t) {
+        if (t !== keepTower && !consumed.includes(t) && this.towerGrid[t.tileY][t.tileX] === t) {
           t.turnIntoSlate();
           this.grid[t.tileY][t.tileX] = TILE_TYPES.SLATE;
         }
@@ -287,6 +288,108 @@ export class Game {
     SOUND.playCombine();
     this.addFloatingText(keepTower.pixelX, keepTower.pixelY - 20, `${keepTower.name}!`, '#fbbf24', 16, true);
     return true;
+  }
+
+  /**
+   * Get all combinations (special or duplicate) available for a specific tower
+   */
+  getCombinationsForTower(tower) {
+    if (!tower || tower.isSlate) return [];
+    const allGems = this.getAllGems();
+    return findCombinationsForTower(tower, allGems);
+  }
+
+  /**
+   * Check if a tower can be combined into any recipe or duplicate upgrade
+   */
+  isTowerCombinable(tower) {
+    if (!tower || tower.isSlate) return false;
+    return this.getCombinationsForTower(tower).length > 0;
+  }
+
+  /**
+   * Get set of all towers on board that currently have valid combinations
+   */
+  getCombinableTowers() {
+    const allGems = this.getAllGems();
+    const set = new Set();
+    for (const g of allGems) {
+      if (findCombinationsForTower(g, allGems).length > 0) {
+        set.add(g);
+      }
+    }
+    return set;
+  }
+
+  /**
+   * Combine directly at a specific tower:
+   * That tower transforms into the new tower at its exact location,
+   * and the partner towers turn into stone slates!
+   */
+  combineAtTower(tower, combination) {
+    if (!tower || !combination) return false;
+
+    const { partnerTowers } = combination;
+
+    if (combination.type === 'special') {
+      const { recipeName } = combination;
+      tower.initFromData({ specialName: recipeName });
+      this.selectedTower = tower;
+
+      // Turn partner ingredient towers into stone slates
+      for (const p of partnerTowers) {
+        p.turnIntoSlate();
+        this.grid[p.tileY][p.tileX] = TILE_TYPES.SLATE;
+      }
+
+      // If in choosing phase and this turn's gems were involved, finalize unchosen placed gems into stone slates and start wave
+      const involvesTurnGem = this.placedGemsThisTurn.includes(tower) || partnerTowers.some(p => this.placedGemsThisTurn.includes(p));
+      if (this.phase === GAME_PHASES.CHOOSING && involvesTurnGem) {
+        for (const t of this.placedGemsThisTurn) {
+          if (t !== tower && !partnerTowers.includes(t) && this.towerGrid[t.tileY][t.tileX] === t) {
+            t.turnIntoSlate();
+            this.grid[t.tileY][t.tileX] = TILE_TYPES.SLATE;
+          }
+        }
+        this.placedGemsThisTurn = [];
+        this.startWave();
+      }
+
+      this.updateRoute();
+      SOUND.playCombine();
+      this.addFloatingText(tower.pixelX, tower.pixelY - 20, `${recipeName}!`, '#fbbf24', 18, true);
+      return true;
+    } else if (combination.type === 'duplicate') {
+      const { targetLevel, gemCode } = combination;
+      tower.initFromData({ code: gemCode, level: targetLevel });
+      this.selectedTower = tower;
+
+      // Turn partner duplicate towers into stone slates
+      for (const p of partnerTowers) {
+        p.turnIntoSlate();
+        this.grid[p.tileY][p.tileX] = TILE_TYPES.SLATE;
+      }
+
+      // If in choosing phase and this turn's gems were involved, finalize unchosen placed gems into stone slates and start wave
+      const involvesTurnGem = this.placedGemsThisTurn.includes(tower) || partnerTowers.some(p => this.placedGemsThisTurn.includes(p));
+      if (this.phase === GAME_PHASES.CHOOSING && involvesTurnGem) {
+        for (const t of this.placedGemsThisTurn) {
+          if (t !== tower && !partnerTowers.includes(t) && this.towerGrid[t.tileY][t.tileX] === t) {
+            t.turnIntoSlate();
+            this.grid[t.tileY][t.tileX] = TILE_TYPES.SLATE;
+          }
+        }
+        this.placedGemsThisTurn = [];
+        this.startWave();
+      }
+
+      this.updateRoute();
+      SOUND.playCombine();
+      this.addFloatingText(tower.pixelX, tower.pixelY - 20, `${tower.name}!`, '#fbbf24', 16, true);
+      return true;
+    }
+
+    return false;
   }
 
   /**

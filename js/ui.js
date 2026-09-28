@@ -327,6 +327,19 @@ export class UIController {
       }
       return;
     }
+
+    const combBtn = e.target.closest('.inspector-combine-btn');
+    if (combBtn && this.game.selectedTower) {
+      e.preventDefault();
+      const idx = parseInt(combBtn.dataset.combIdx, 10);
+      const combos = this.game.getCombinationsForTower(this.game.selectedTower);
+      const chosen = combos[idx];
+      if (chosen) {
+        this.game.combineAtTower(this.game.selectedTower, chosen);
+        this.invalidateUI();
+      }
+      return;
+    }
   }
 
   onCodexClick(e) {
@@ -375,7 +388,9 @@ export class UIController {
       return `slate_${t.tileX}_${t.tileY}_${this.game.gold >= CONFIG.SLATE_REMOVE_COST}`;
     }
     const isTemp = this.game.placedGemsThisTurn.includes(t);
-    return `tower_${t.tileX}_${t.tileY}_${t.code}_${t.level}_${t.isSpecial ? t.specialName : ''}_${t.kills}_${Math.floor(t.totalDamageDealt / 50)}_${t.getEffectiveDamage()}_${t.getEffectiveAttackSpeed()}_${t.getEffectiveRange()}_${isTemp}_${this.game.phase}`;
+    const combos = this.game.getCombinationsForTower(t);
+    const comboKey = combos.map(c => `${c.type}_${c.recipeName || c.targetLevel}_${(c.partnerTowers || []).map(p => `${p.tileX},${p.tileY}`).join('-')}`).join(';');
+    return `tower_${t.tileX}_${t.tileY}_${t.code}_${t.level}_${t.isSpecial ? t.specialName : ''}_${t.kills}_${Math.floor(t.totalDamageDealt / 50)}_${t.getEffectiveDamage()}_${t.getEffectiveAttackSpeed()}_${t.getEffectiveRange()}_${isTemp}_${this.game.phase}_${comboKey}`;
   }
 
   update() {
@@ -579,6 +594,50 @@ export class UIController {
     const isUnconfirmedGem = this.game.phase === GAME_PHASES.CHOOSING && this.game.placedGemsThisTurn.includes(t);
     const unconfirmedIdx = isUnconfirmedGem ? this.game.placedGemsThisTurn.indexOf(t) : -1;
 
+    const combinations = this.game.getCombinationsForTower(t);
+    let combinationsHtml = '';
+    if (combinations.length > 0) {
+      combinationsHtml = `
+        <div class="combine-ready-section">
+          <div class="combine-ready-header">
+            <span class="combine-badge-icon">✨</span>
+            <div class="combine-ready-text">
+              <span class="combine-ready-title">Ready to Combine!</span>
+              <span class="combine-ready-hint">Upgrades here. Consumed towers turn into rock slates.</span>
+            </div>
+          </div>
+          <div class="combine-btn-list">
+            ${combinations.map((c, idx) => {
+              if (c.type === 'special') {
+                return `
+                  <button type="button" class="game-btn inspector-combine-btn special-combine-btn" data-comb-idx="${idx}">
+                    <div class="combine-btn-info">
+                      <span class="combine-btn-title">⭐ Combine: ${c.recipeName}</span>
+                      <span class="combine-btn-sub">${c.def.tier} • Consumes: ${c.partnerTowers.map(p => p.name).join(' + ')}</span>
+                    </div>
+                    <span class="combine-btn-action">Combine ➔</span>
+                  </button>
+                `;
+              } else {
+                const nextQ = QUALITIES[c.targetLevel];
+                const gemName = BASE_GEMS[c.gemCode]?.name || '';
+                const nextName = nextQ ? `${nextQ.namePrefix} ${gemName}` : `Tier ${c.targetLevel}`;
+                return `
+                  <button type="button" class="game-btn inspector-combine-btn dup-combine-btn" data-comb-idx="${idx}">
+                    <div class="combine-btn-info">
+                      <span class="combine-btn-title">⬆️ ${c.label}</span>
+                      <span class="combine-btn-sub">${nextName} • Consumes ${c.partnerTowers.length} ${gemName}</span>
+                    </div>
+                    <span class="combine-btn-action">Upgrade ➔</span>
+                  </button>
+                `;
+              }
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
     panel.innerHTML = `
       <div class="inspector-header">
         <div class="gem-badge" style="background: ${t.gemColor}; border-color: ${t.accentColor}">
@@ -589,6 +648,8 @@ export class UIController {
           <div>${tierBadge}</div>
         </div>
       </div>
+
+      ${combinationsHtml}
 
       <div class="inspector-stats-grid">
         <div class="stat-card">

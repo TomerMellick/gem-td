@@ -168,7 +168,36 @@ export class GameRenderer {
 
   drawTowersAndSlates(ctx, game) {
     const ts = this.tileSize;
+    const combinableSet = game.getCombinableTowers();
 
+    // 1. If a combinable tower is currently selected, draw tether lines to its partners
+    if (game.selectedTower && combinableSet.has(game.selectedTower)) {
+      const combos = game.getCombinationsForTower(game.selectedTower);
+      const partnerSet = new Set();
+      for (const c of combos) {
+        if (c.partnerTowers) {
+          for (const p of c.partnerTowers) partnerSet.add(p);
+        }
+      }
+
+      ctx.save();
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.lineDashOffset = -this.time * 25;
+      ctx.shadowColor = '#f59e0b';
+      ctx.shadowBlur = 8;
+
+      for (const p of partnerSet) {
+        ctx.beginPath();
+        ctx.moveTo(game.selectedTower.pixelX, game.selectedTower.pixelY);
+        ctx.lineTo(p.pixelX, p.pixelY);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 2. Draw towers and slates
     for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
       for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
         const tower = game.towerGrid[y][x];
@@ -183,7 +212,8 @@ export class GameRenderer {
           this.drawSlate(ctx, px, py, ts);
         } else {
           const isTemp = game.placedGemsThisTurn.includes(tower);
-          this.drawGemTower(ctx, tower, cx, cy, ts, isTemp);
+          const isCombinable = combinableSet.has(tower);
+          this.drawGemTower(ctx, tower, cx, cy, ts, isTemp, isCombinable);
         }
       }
     }
@@ -212,7 +242,7 @@ export class GameRenderer {
     ctx.restore();
   }
 
-  drawGemTower(ctx, tower, cx, cy, ts, isTemp) {
+  drawGemTower(ctx, tower, cx, cy, ts, isTemp, isCombinable) {
     ctx.save();
 
     const rad = (ts / 2) * 0.78;
@@ -225,6 +255,30 @@ export class GameRenderer {
       ctx.beginPath();
       ctx.arc(cx, cy, rad + 4 + pulse, 0, Math.PI * 2);
       ctx.stroke();
+    }
+
+    // Animated combine marker when all recipe/duplicate ingredients are ready on board
+    if (isCombinable) {
+      const pulse = Math.sin(this.time * 5) * 2;
+      ctx.save();
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 3]);
+      ctx.lineDashOffset = -this.time * 15;
+      ctx.shadowColor = '#f59e0b';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad + 5 + pulse, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Sparkle indicator icon
+      ctx.fillStyle = '#fde047';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowBlur = 4;
+      ctx.fillText('✨', cx + rad * 0.7, cy - rad * 0.7);
+      ctx.restore();
     }
 
     // Glow aura for higher quality / special towers

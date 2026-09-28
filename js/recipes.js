@@ -528,3 +528,102 @@ export function findDuplicateUpgrades(placedGems) {
 
   return upgrades;
 }
+
+/**
+ * Find all recipe or duplicate combinations that a specific tower can be transformed into
+ * @param {object} targetTower the tower being inspected
+ * @param {Array<object>} allGems array of active towers on board
+ * @returns {Array<object>} list of possible combinations for targetTower
+ */
+export function findCombinationsForTower(targetTower, allGems) {
+  if (!targetTower || targetTower.isSlate) return [];
+
+  const results = [];
+  const targetCode = targetTower.isSpecial ? targetTower.specialName : `${targetTower.code}${targetTower.level}`;
+
+  // 1. Duplicate Upgrades (for base gems < level 5)
+  if (!targetTower.isSpecial && targetTower.level && targetTower.level < 5) {
+    const matchingGems = allGems.filter(g =>
+      !g.isSpecial &&
+      !g.isSlate &&
+      g.code === targetTower.code &&
+      g.level === targetTower.level
+    );
+
+    // Pair combine (needs at least 2 matching)
+    if (matchingGems.length >= 2) {
+      const partner = matchingGems.find(g => g !== targetTower);
+      if (partner) {
+        results.push({
+          type: 'duplicate',
+          subType: 'pair',
+          gemCode: targetTower.code,
+          currentLevel: targetTower.level,
+          targetLevel: targetTower.level + 1,
+          partnerTowers: [partner],
+          label: `Combine Pair → Tier ${targetTower.level + 1}`,
+          title: `Pair Combine (Tier ${targetTower.level + 1})`
+        });
+      }
+    }
+
+    // Quad combine (needs at least 4 matching, level <= 3)
+    if (matchingGems.length >= 4 && targetTower.level <= 3) {
+      const partners = matchingGems.filter(g => g !== targetTower).slice(0, 3);
+      if (partners.length === 3) {
+        results.push({
+          type: 'duplicate',
+          subType: 'quad',
+          gemCode: targetTower.code,
+          currentLevel: targetTower.level,
+          targetLevel: targetTower.level + 2,
+          partnerTowers: partners,
+          label: `Combine Quad → Tier ${targetTower.level + 2}`,
+          title: `Quad Combine (Tier ${targetTower.level + 2})`
+        });
+      }
+    }
+  }
+
+  // 2. Special Tower Combinations
+  for (const [recipeName, def] of Object.entries(SPECIAL_TOWERS)) {
+    if (!def.recipe.includes(targetCode)) continue;
+
+    // Remove one instance of targetCode from required ingredients
+    const remainingReqs = [...def.recipe];
+    const targetIdx = remainingReqs.indexOf(targetCode);
+    remainingReqs.splice(targetIdx, 1);
+
+    // Find partners among all other active gems
+    const availablePool = allGems.filter(g => g !== targetTower);
+    const matchedPartners = [];
+    let possible = true;
+
+    for (const req of remainingReqs) {
+      const foundIdx = availablePool.findIndex(g => {
+        if (matchedPartners.includes(g)) return false;
+        const code = g.isSpecial ? g.specialName : `${g.code}${g.level}`;
+        return code === req;
+      });
+
+      if (foundIdx === -1) {
+        possible = false;
+        break;
+      }
+      matchedPartners.push(availablePool[foundIdx]);
+    }
+
+    if (possible) {
+      results.push({
+        type: 'special',
+        recipeName,
+        def,
+        partnerTowers: matchedPartners,
+        label: `Combine into ${recipeName}`,
+        title: `${recipeName} (${def.tier})`
+      });
+    }
+  }
+
+  return results;
+}
