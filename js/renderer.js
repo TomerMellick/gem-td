@@ -1,6 +1,17 @@
-// Gem TD - Canvas 2D Game Renderer
+// Gem TD - Canvas 2D Game Renderer (Enhanced Visual Effects)
 import { CONFIG, QUALITIES, TRAP_TYPES, RUNE_TYPES } from './config.js';
 import { TILE_TYPES } from './pathfinding.js';
+
+// Damage type visual definitions for consistent theming
+const DAMAGE_TYPE_VISUALS = {
+  physical: { color: '#f87171', icon: '⚔', trailColor: '#fca5a5', impactColor: '#dc2626' },
+  magic:    { color: '#a855f7', icon: '✦', trailColor: '#c084fc', impactColor: '#7c3aed' },
+  lightning:{ color: '#22d3ee', icon: '⚡', trailColor: '#67e8f9', impactColor: '#06b6d4' },
+  poison:   { color: '#4ade80', icon: '☠', trailColor: '#86efac', impactColor: '#16a34a' },
+  fire:     { color: '#f97316', icon: '🔥', trailColor: '#fdba74', impactColor: '#ea580c' },
+  ice:      { color: '#38bdf8', icon: '❄', trailColor: '#7dd3fc', impactColor: '#0284c7' },
+  crit:     { color: '#fbbf24', icon: '💥', trailColor: '#fde047', impactColor: '#f59e0b' },
+};
 
 export class GameRenderer {
   constructor(canvas) {
@@ -15,6 +26,13 @@ export class GameRenderer {
     this.showPath = true;
     this.showRanges = true;
     this.showGrid = true;
+
+    // Screen shake state
+    this.shakeIntensity = 0;
+    this.shakeDuration = 0;
+    this.shakeTimer = 0;
+    this.shakeOffsetX = 0;
+    this.shakeOffsetY = 0;
   }
 
   resize(width, height) {
@@ -25,13 +43,41 @@ export class GameRenderer {
     this.tileSize = width / CONFIG.GRID_WIDTH;
   }
 
+  triggerScreenShake(intensity = 4, duration = 0.15) {
+    this.shakeIntensity = Math.max(this.shakeIntensity, intensity);
+    this.shakeDuration = Math.max(this.shakeDuration, duration);
+    this.shakeTimer = 0;
+  }
+
   render(game, dt) {
     this.time += dt;
     const ctx = this.ctx;
 
+    // Update screen shake
+    if (this.shakeDuration > 0) {
+      this.shakeTimer += dt;
+      if (this.shakeTimer >= this.shakeDuration) {
+        this.shakeDuration = 0;
+        this.shakeIntensity = 0;
+        this.shakeOffsetX = 0;
+        this.shakeOffsetY = 0;
+      } else {
+        const decay = 1 - (this.shakeTimer / this.shakeDuration);
+        const intensity = this.shakeIntensity * decay;
+        this.shakeOffsetX = (Math.random() - 0.5) * 2 * intensity;
+        this.shakeOffsetY = (Math.random() - 0.5) * 2 * intensity;
+      }
+    }
+
     // Clear canvas with dark fantasy stone background
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, this.width, this.height);
+
+    // Apply screen shake transform
+    ctx.save();
+    if (this.shakeOffsetX || this.shakeOffsetY) {
+      ctx.translate(this.shakeOffsetX, this.shakeOffsetY);
+    }
 
     // Subtle background pattern
     this.drawBackgroundGrid(ctx);
@@ -65,17 +111,23 @@ export class GameRenderer {
     // Draw creeps
     this.drawCreeps(ctx, game.creeps);
 
-    // Draw projectiles
+    // Draw projectiles with damage-type visuals
     this.drawProjectiles(ctx, game.projectiles);
 
     // Draw lightning arcs
     this.drawLightningArcs(ctx, game.lightningArcs);
 
+    // Draw impact rings
+    this.drawImpactRings(ctx, game.impactRings || []);
+
     // Draw particles
     this.drawParticles(ctx, game.particles);
 
-    // Draw floating text
+    // Draw floating text with damage type styling
     this.drawFloatingText(ctx, game.floatingTexts);
+
+    // Restore from screen shake
+    ctx.restore();
   }
 
   drawBackgroundGrid(ctx) {
@@ -712,6 +764,9 @@ export class GameRenderer {
     ctx.restore();
   }
 
+  // ═══════════════════════════════════════════════════════
+  //  ENHANCED CREEP RENDERING with debuff particle effects
+  // ═══════════════════════════════════════════════════════
   drawCreeps(ctx, creeps) {
     for (const creep of creeps) {
       if (creep.hp <= 0) continue;
@@ -732,11 +787,160 @@ export class GameRenderer {
         cy -= 10 + Math.sin(this.time * 6 + creep.wave) * 3;
       }
 
+      // ── Debuff ambient particle effects ──
+
+      // BURN: Flickering fire embers around body
+      if (creep.debuffs.burn) {
+        const flicker = Math.sin(this.time * 15 + cx) * 0.3 + 0.7;
+        ctx.save();
+        ctx.globalAlpha = flicker * 0.6;
+        // Fire glow under creep
+        const fireGrad = ctx.createRadialGradient(cx, cy, creep.radius * 0.3, cx, cy, creep.radius * 2.2);
+        fireGrad.addColorStop(0, 'rgba(249, 115, 22, 0.5)');
+        fireGrad.addColorStop(0.5, 'rgba(239, 68, 68, 0.2)');
+        fireGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = fireGrad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, creep.radius * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        // Small flame licks
+        for (let f = 0; f < 3; f++) {
+          const fAngle = this.time * 8 + f * 2.1;
+          const fDist = creep.radius * (0.8 + Math.sin(fAngle * 1.7) * 0.3);
+          const fx = cx + Math.cos(fAngle) * fDist;
+          const fy = cy + Math.sin(fAngle) * fDist - 3;
+          ctx.fillStyle = f % 2 === 0 ? '#f97316' : '#fbbf24';
+          ctx.beginPath();
+          ctx.arc(fx, fy, 2 + Math.sin(this.time * 20 + f) * 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // POISON: Toxic bubbles floating up
+      if (creep.debuffs.poison) {
+        ctx.save();
+        ctx.globalAlpha = 0.65;
+        for (let b = 0; b < 3; b++) {
+          const bubblePhase = this.time * 3 + b * 1.3;
+          const bubbleY = cy - creep.radius - (bubblePhase % 2) * 8;
+          const bubbleX = cx + Math.sin(bubblePhase * 2 + b) * 5;
+          const bSize = 1.5 + Math.sin(bubblePhase) * 0.8;
+          ctx.strokeStyle = '#4ade80';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(bubbleX, bubbleY, bSize, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        // Green toxic aura
+        const toxGrad = ctx.createRadialGradient(cx, cy, creep.radius * 0.5, cx, cy, creep.radius * 1.8);
+        toxGrad.addColorStop(0, 'rgba(74, 222, 128, 0.15)');
+        toxGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = toxGrad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, creep.radius * 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // SLOW (ICE): Frost crystals and icy shimmer
+      if (creep.debuffs.slow) {
+        ctx.save();
+        ctx.globalAlpha = 0.55;
+        // Icy blue aura
+        const iceGrad = ctx.createRadialGradient(cx, cy, creep.radius * 0.4, cx, cy, creep.radius * 1.8);
+        iceGrad.addColorStop(0, 'rgba(56, 189, 248, 0.25)');
+        iceGrad.addColorStop(0.7, 'rgba(147, 197, 253, 0.08)');
+        iceGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = iceGrad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, creep.radius * 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        // Small frost crystals
+        ctx.strokeStyle = '#bae6fd';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 4; i++) {
+          const angle = this.time * 1.5 + i * Math.PI / 2;
+          const dist = creep.radius * 1.1;
+          const fx = cx + Math.cos(angle) * dist;
+          const fy = cy + Math.sin(angle) * dist;
+          // Draw a tiny snowflake cross
+          ctx.beginPath();
+          ctx.moveTo(fx - 2, fy);
+          ctx.lineTo(fx + 2, fy);
+          ctx.moveTo(fx, fy - 2);
+          ctx.lineTo(fx, fy + 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // STUN: Spinning stars above head
+      if (creep.debuffs.stun) {
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = '#fde047';
+        for (let s = 0; s < 3; s++) {
+          const starAngle = this.time * 6 + s * (Math.PI * 2 / 3);
+          const starDist = creep.radius * 0.9;
+          const sx = cx + Math.cos(starAngle) * starDist;
+          const sy = cy - creep.radius - 6 + Math.sin(starAngle * 2) * 2;
+          this._drawStar(ctx, sx, sy, 3, 5, 2.5);
+        }
+        ctx.restore();
+      }
+
+      // ARMOR SHRED: Red cracks/fracture lines
+      if (creep.debuffs.armorShred) {
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = '#f87171';
+        ctx.lineWidth = 1;
+        for (let c = 0; c < 3; c++) {
+          const crackAngle = c * Math.PI * 0.7 + 0.3;
+          const inner = creep.radius * 0.4;
+          const outer = creep.radius * 1.1;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(crackAngle) * inner, cy + Math.sin(crackAngle) * inner);
+          ctx.lineTo(cx + Math.cos(crackAngle + 0.2) * outer, cy + Math.sin(crackAngle + 0.2) * outer);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // MAGIC SHRED: Purple arcane spirals
+      if (creep.debuffs.magicShred) {
+        ctx.save();
+        ctx.globalAlpha = 0.4;
+        ctx.strokeStyle = '#c084fc';
+        ctx.lineWidth = 1;
+        const spiralAngle = this.time * 4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, creep.radius * 1.3, spiralAngle, spiralAngle + Math.PI * 1.2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // ── Hit flash effect ──
+      if (creep._hitFlashTimer && creep._hitFlashTimer > 0) {
+        const flashAlpha = Math.min(1, creep._hitFlashTimer * 6);
+        ctx.save();
+        ctx.globalAlpha = flashAlpha * 0.5;
+        const flashColor = creep._hitFlashColor || '#ffffff';
+        ctx.fillStyle = flashColor;
+        ctx.beginPath();
+        ctx.arc(cx, cy, creep.radius * 1.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
       // Creep Body
       let color = creep.isBoss ? '#ef4444' : creep.isFlying ? '#38bdf8' : '#e2e8f0';
-      if (creep.debuffs.slow) color = '#93c5fd';
-      if (creep.debuffs.poison) color = '#86efac';
-      if (creep.debuffs.burn) color = '#fdba74';
+      // Tint body slightly for active debuffs (subtle overlay)
+      if (creep.debuffs.stun) color = '#fde047';
+      else if (creep.debuffs.burn) color = '#fdba74';
+      else if (creep.debuffs.poison) color = '#86efac';
+      else if (creep.debuffs.slow) color = '#93c5fd';
 
       ctx.fillStyle = color;
       ctx.beginPath();
@@ -771,6 +975,26 @@ export class GameRenderer {
         ctx.fill();
       }
 
+      // Immunity badges
+      if (creep.isMagicImmune) {
+        ctx.save();
+        ctx.font = 'bold 7px sans-serif';
+        ctx.fillStyle = '#c084fc';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('✦M', cx + creep.radius + 5, cy);
+        ctx.restore();
+      }
+      if (creep.isPhysicalImmune) {
+        ctx.save();
+        ctx.font = 'bold 7px sans-serif';
+        ctx.fillStyle = '#f87171';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⚔P', cx - creep.radius - 5, cy);
+        ctx.restore();
+      }
+
       // Health bar above creep
       const barW = creep.radius * 2.4;
       const barH = 4;
@@ -791,99 +1015,418 @@ export class GameRenderer {
         ctx.fillRect(barX, barY - 3, barW * shieldPercent, 2);
       }
 
+      // Active debuff indicator icons below health bar
+      const activeDebuffs = [];
+      if (creep.debuffs.slow) activeDebuffs.push({ icon: '❄', color: '#38bdf8' });
+      if (creep.debuffs.poison) activeDebuffs.push({ icon: '☠', color: '#4ade80' });
+      if (creep.debuffs.burn) activeDebuffs.push({ icon: '🔥', color: '#f97316' });
+      if (creep.debuffs.stun) activeDebuffs.push({ icon: '⭐', color: '#fde047' });
+      if (creep.debuffs.armorShred) activeDebuffs.push({ icon: '🛡', color: '#f87171' });
+
+      if (activeDebuffs.length > 0) {
+        const iconSpacing = 8;
+        const startIconX = cx - ((activeDebuffs.length - 1) * iconSpacing) / 2;
+        ctx.font = '6px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (let di = 0; di < activeDebuffs.length; di++) {
+          ctx.fillStyle = activeDebuffs[di].color;
+          ctx.fillText(activeDebuffs[di].icon, startIconX + di * iconSpacing, cy + creep.radius + 6);
+        }
+      }
+
       ctx.restore();
     }
   }
 
+  // ═══════════════════════════════════════════════════════
+  //  ENHANCED PROJECTILE RENDERING per damage type
+  // ═══════════════════════════════════════════════════════
   drawProjectiles(ctx, projectiles) {
     for (const p of projectiles) {
       if (p.isDead) continue;
       ctx.save();
 
-      // Glowing projectile
-      const grad = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, p.radius * 2);
-      grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(0.5, p.color);
-      grad.addColorStop(1, 'transparent');
+      const isCrit = p.options && p.options.isCrit;
+      const hasLightning = p.effects && p.effects.chainLightning;
+      const hasPoison = p.effects && p.effects.poison;
+      const hasSlow = p.effects && p.effects.slow;
+      const hasSplash = p.effects && p.effects.splash;
+      const hasCleave = p.effects && p.effects.cleave;
+      const hasStun = p.effects && p.effects.stun;
 
+      // Determine visual style based on damage type and effects
+      let projColor = p.color;
+      let glowColor = p.color;
+      let trailColor = p.color + '88';
+      let projSize = p.radius;
+
+      if (isCrit) {
+        projColor = '#fbbf24';
+        glowColor = '#fde047';
+        trailColor = 'rgba(251, 191, 36, 0.5)';
+        projSize = p.radius * 1.6;
+      } else if (hasLightning) {
+        projColor = '#22d3ee';
+        glowColor = '#67e8f9';
+        trailColor = 'rgba(34, 211, 238, 0.4)';
+      } else if (hasPoison) {
+        projColor = '#4ade80';
+        glowColor = '#86efac';
+        trailColor = 'rgba(74, 222, 128, 0.4)';
+      } else if (hasSlow) {
+        projColor = '#38bdf8';
+        glowColor = '#7dd3fc';
+        trailColor = 'rgba(56, 189, 248, 0.3)';
+      } else if (p.damageType === 'magic') {
+        projColor = p.color;
+        glowColor = '#c084fc';
+        trailColor = 'rgba(168, 85, 247, 0.35)';
+      }
+
+      // ── Trail effect ──
+      if (p._prevX !== undefined) {
+        ctx.strokeStyle = trailColor;
+        ctx.lineWidth = projSize * 0.8;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(p._prevX, p._prevY);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      }
+
+      // ── Outer glow bloom ──
+      const bloomSize = projSize * (isCrit ? 4.5 : 3);
+      const grad = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, bloomSize);
+      grad.addColorStop(0, glowColor + 'cc');
+      grad.addColorStop(0.3, projColor + '66');
+      grad.addColorStop(1, 'transparent');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius * 2, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, bloomSize, 0, Math.PI * 2);
       ctx.fill();
 
+      // ── Projectile body shape based on type ──
+      if (hasLightning) {
+        // Electric bolt shape - small jagged line
+        ctx.strokeStyle = '#cffafe';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(p.x - 3, p.y - 2);
+        ctx.lineTo(p.x + 1, p.y);
+        ctx.lineTo(p.x - 1, p.y + 1);
+        ctx.lineTo(p.x + 3, p.y + 2);
+        ctx.stroke();
+      } else if (hasSplash) {
+        // Fireball - larger glowing sphere
+        ctx.fillStyle = '#ff6b35';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, projSize * 1.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fbbf24';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, projSize * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (hasCleave) {
+        // Blade/slash projectile - diamond shape
+        ctx.fillStyle = projColor;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y - projSize * 1.5);
+        ctx.lineTo(p.x + projSize, p.y);
+        ctx.lineTo(p.x, p.y + projSize * 1.5);
+        ctx.lineTo(p.x - projSize, p.y);
+        ctx.closePath();
+        ctx.fill();
+      } else if (hasStun) {
+        // Stun projectile - star shape
+        ctx.fillStyle = '#fde047';
+        this._drawStar(ctx, p.x, p.y, 5, projSize * 1.2, projSize * 0.5);
+      } else {
+        // Standard glowing orb
+        ctx.fillStyle = projColor;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, projSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Bright inner core
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius * 0.7, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, projSize * 0.4, 0, Math.PI * 2);
       ctx.fill();
+
+      // Crit sparkle halo
+      if (isCrit) {
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 1.5;
+        const sparkleAngle = this.time * 12;
+        for (let i = 0; i < 4; i++) {
+          const a = sparkleAngle + i * Math.PI / 2;
+          const dist = projSize * 2;
+          ctx.beginPath();
+          ctx.moveTo(p.x + Math.cos(a) * (dist * 0.5), p.y + Math.sin(a) * (dist * 0.5));
+          ctx.lineTo(p.x + Math.cos(a) * dist, p.y + Math.sin(a) * dist);
+          ctx.stroke();
+        }
+      }
+
+      // Store position for trail
+      p._prevX = p.x;
+      p._prevY = p.y;
 
       ctx.restore();
     }
   }
 
+  // ═══════════════════════════════════════════════════════
+  //  ENHANCED LIGHTNING ARCS
+  // ═══════════════════════════════════════════════════════
   drawLightningArcs(ctx, arcs) {
     if (!arcs || arcs.length === 0) return;
     ctx.save();
     ctx.lineCap = 'round';
 
-    // 1. Soft outer bloom
-    ctx.strokeStyle = 'rgba(6, 182, 212, 0.4)';
-    ctx.lineWidth = 5;
     for (const arc of arcs) {
+      const alpha = Math.min(1, arc.life * 8);
+
+      // 1. Wide outer bloom
+      ctx.globalAlpha = alpha * 0.4;
+      ctx.strokeStyle = '#06b6d4';
+      ctx.lineWidth = 8;
       ctx.beginPath();
       ctx.moveTo(arc.x1, arc.y1);
-      const steps = 4;
+      const steps = 5;
       for (let i = 1; i <= steps; i++) {
         const t = i / steps;
-        const lx = arc.x1 + (arc.x2 - arc.x1) * t + (i < steps ? (Math.random() - 0.5) * 16 : 0);
-        const ly = arc.y1 + (arc.y2 - arc.y1) * t + (i < steps ? (Math.random() - 0.5) * 16 : 0);
+        const lx = arc.x1 + (arc.x2 - arc.x1) * t + (i < steps ? (Math.random() - 0.5) * 20 : 0);
+        const ly = arc.y1 + (arc.y2 - arc.y1) * t + (i < steps ? (Math.random() - 0.5) * 20 : 0);
         ctx.lineTo(lx, ly);
       }
       ctx.stroke();
+
+      // 2. Medium electric halo
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.strokeStyle = '#22d3ee';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(arc.x1, arc.y1);
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        const lx = arc.x1 + (arc.x2 - arc.x1) * t + (i < steps ? (Math.random() - 0.5) * 14 : 0);
+        const ly = arc.y1 + (arc.y2 - arc.y1) * t + (i < steps ? (Math.random() - 0.5) * 14 : 0);
+        ctx.lineTo(lx, ly);
+      }
+      ctx.stroke();
+
+      // 3. Crisp inner white-cyan core
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = '#ecfeff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(arc.x1, arc.y1);
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        const lx = arc.x1 + (arc.x2 - arc.x1) * t + (i < steps ? (Math.random() - 0.5) * 10 : 0);
+        const ly = arc.y1 + (arc.y2 - arc.y1) * t + (i < steps ? (Math.random() - 0.5) * 10 : 0);
+        ctx.lineTo(lx, ly);
+      }
+      ctx.stroke();
+
+      // 4. Impact sparks at endpoints
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.fillStyle = '#67e8f9';
+      ctx.beginPath();
+      ctx.arc(arc.x2, arc.y2, 4, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    // 2. Crisp inner electrical core
-    ctx.strokeStyle = '#cffafe';
-    ctx.lineWidth = 2;
-    for (const arc of arcs) {
-      ctx.beginPath();
-      ctx.moveTo(arc.x1, arc.y1);
-      const steps = 4;
-      for (let i = 1; i <= steps; i++) {
-        const t = i / steps;
-        const lx = arc.x1 + (arc.x2 - arc.x1) * t + (i < steps ? (Math.random() - 0.5) * 16 : 0);
-        const ly = arc.y1 + (arc.y2 - arc.y1) * t + (i < steps ? (Math.random() - 0.5) * 16 : 0);
-        ctx.lineTo(lx, ly);
-      }
-      ctx.stroke();
-    }
     ctx.restore();
   }
 
+  // ═══════════════════════════════════════════════════════
+  //  IMPACT RINGS - expanding ring effects at hit locations
+  // ═══════════════════════════════════════════════════════
+  drawImpactRings(ctx, rings) {
+    if (!rings || rings.length === 0) return;
+    for (const ring of rings) {
+      const progress = ring.age / ring.life;
+      const radius = ring.startRadius + (ring.maxRadius - ring.startRadius) * progress;
+      const alpha = (1 - progress) * 0.6;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = ring.color;
+      ctx.lineWidth = Math.max(0.5, 2 * (1 - progress));
+      ctx.beginPath();
+      ctx.arc(ring.x, ring.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Inner filled flash (first 30% of life)
+      if (progress < 0.3) {
+        ctx.globalAlpha = (0.3 - progress) * 1.5;
+        ctx.fillStyle = ring.color;
+        ctx.beginPath();
+        ctx.arc(ring.x, ring.y, radius * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  ENHANCED PARTICLE RENDERING with glow and type shapes
+  // ═══════════════════════════════════════════════════════
   drawParticles(ctx, particles) {
     for (const p of particles) {
       ctx.save();
       ctx.globalAlpha = p.alpha;
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fill();
+
+      if (p.type === 'ember') {
+        // Ember: glowing stretched oval
+        const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 2);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.3, p.color);
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y, p.size * 1.5, p.size, p.rotation, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.type === 'frost_flake') {
+        // Snowflake: six-point cross with glow
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 6; i++) {
+          const angle = i * Math.PI / 3 + p.rotation;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x + Math.cos(angle) * p.size * 2, p.y + Math.sin(angle) * p.size * 2);
+          ctx.stroke();
+        }
+      } else if (p.type === 'poison_bubble') {
+        // Bubble: hollow circle with highlight
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.beginPath();
+        ctx.arc(p.x - p.size * 0.3, p.y - p.size * 0.3, p.size * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.type === 'shock') {
+        // Electric spark: jagged line
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(p.x - p.size, p.y);
+        ctx.lineTo(p.x - p.size * 0.3, p.y - p.size * 0.7);
+        ctx.lineTo(p.x + p.size * 0.3, p.y + p.size * 0.5);
+        ctx.lineTo(p.x + p.size, p.y);
+        ctx.stroke();
+      } else if (p.type === 'ring') {
+        // Expanding ring
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = Math.max(0.5, 2 * (1 - p.age / p.life));
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (p.type === 'star') {
+        ctx.fillStyle = p.color;
+        this._drawStar(ctx, p.x, p.y, 5, p.size, p.size * 0.4);
+      } else if (p.type === 'smoke') {
+        const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+        grad.addColorStop(0, p.color);
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.type === 'slash') {
+        // Cleave slash arc
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 3, p.arcStart, p.arcEnd);
+        ctx.stroke();
+      } else {
+        // Default spark: glowing circle with bloom
+        const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 2);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.4, p.color);
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Solid core
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
     }
   }
 
+  // ═══════════════════════════════════════════════════════
+  //  ENHANCED FLOATING TEXT with damage type icons & style
+  // ═══════════════════════════════════════════════════════
   drawFloatingText(ctx, floatingTexts) {
     for (const ft of floatingTexts) {
       ctx.save();
       ctx.globalAlpha = ft.alpha;
-      ctx.font = `${ft.isCrit ? 'bold' : ''} ${ft.fontSize}px sans-serif`;
+
+      // Scale bounce on spawn
+      const scaleVal = ft.scale || 1;
+      ctx.translate(ft.x, ft.y);
+      ctx.scale(scaleVal, scaleVal);
+      ctx.translate(-ft.x, -ft.y);
+
+      const fontSize = ft.fontSize || 14;
+      ctx.font = `${ft.isCrit ? 'bold ' : ''}${fontSize}px sans-serif`;
       ctx.textAlign = 'center';
-      // Crisp outline without software shadow blur
+
+      // Build display text with type icon
+      let displayText = ft.text;
+      if (ft.icon) {
+        displayText = ft.icon + ' ' + ft.text;
+      }
+
+      // Shadow/outline for readability
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 3;
-      ctx.strokeText(ft.text, ft.x, ft.y);
+      ctx.lineJoin = 'round';
+      ctx.strokeText(displayText, ft.x, ft.y);
+
+      // Main text color
       ctx.fillStyle = ft.color;
-      ctx.fillText(ft.text, ft.x, ft.y);
+      ctx.fillText(displayText, ft.x, ft.y);
+
+      // Crit extra effects: golden glow halo
+      if (ft.isCrit && ft.age < 0.3) {
+        ctx.globalAlpha = ft.alpha * (0.3 - ft.age) * 3;
+        ctx.fillStyle = '#fde047';
+        ctx.font = `bold ${fontSize + 4}px sans-serif`;
+        ctx.fillText(displayText, ft.x, ft.y);
+      }
+
       ctx.restore();
     }
+  }
+
+  // ── Utility: Draw a star shape ──
+  _drawStar(ctx, cx, cy, points, outerR, innerR) {
+    ctx.beginPath();
+    for (let i = 0; i < points * 2; i++) {
+      const r = i % 2 === 0 ? outerR : innerR;
+      const angle = (i * Math.PI) / points - Math.PI / 2;
+      const x = cx + r * Math.cos(angle);
+      const y = cy + r * Math.sin(angle);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
   }
 }

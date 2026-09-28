@@ -19,6 +19,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   const game = new Game();
   const renderer = new GameRenderer(canvas);
+  game.renderer = renderer; // Link renderer for screen shake effects
   const ui = new UIController(game, renderer);
   const ai = new AIAgent(game, ui);
 

@@ -92,11 +92,11 @@ export class FloatingText {
     this.type = type;
     this.icon = icon;
     this.alpha = 1.0;
-    this.scale = isCrit ? 1.6 : 1.25;
+    this.scale = isCrit ? 1.8 : 1.3;
     this.targetScale = 1.0;
-    this.vy = isCrit ? -55 : -35;
+    this.vy = isCrit ? -60 : -35;
     this.vx = (Math.random() - 0.5) * 20;
-    this.lifetime = isCrit ? 1.1 : 0.85;
+    this.lifetime = isCrit ? 1.2 : 0.9;
     this.age = 0;
   }
 
@@ -202,6 +202,10 @@ export class Creep {
     this.maxShieldHp = this.shieldHp;
     this.timeSinceLastHit = 0;
     this.magicResistance = 0; // Base magic resistance (0% standard)
+
+    // Visual hit flash state
+    this._hitFlashTimer = 0;
+    this._hitFlashColor = '#ffffff';
 
     // Debuffs
     this.debuffs = {
@@ -315,6 +319,9 @@ export class Creep {
 
   update(dt, game) {
     if (this.hp <= 0 || this.reachedCastle) return;
+
+    // Decay hit flash
+    if (this._hitFlashTimer > 0) this._hitFlashTimer -= dt;
 
     this.timeSinceLastHit += dt;
 
@@ -482,13 +489,17 @@ export class Projectile {
     const res = this.target.takeDamage(this.damage, this.damageType, this.options);
 
     if (res.evaded) {
-      game.addFloatingText(this.target.x, this.target.y - 12, 'MISS', '#94a3b8', 13);
+      game.addFloatingText(this.target.x, this.target.y - 12, 'MISS', '#94a3b8', 13, false, 'physical', '💨');
+      // Evade visual: quick grey puff
+      game.addImpactParticles(this.target.x, this.target.y, 'physical', 3);
       return;
     }
 
     if (res.immune) {
-      // Show IMMUNE text for the primary hit
-      game.addFloatingText(this.target.x, this.target.y - 12, 'IMMUNE', '#f87171', 13);
+      // Show IMMUNE text with damage-type coloring
+      const immuneIcon = this.damageType === 'magic' ? '✦' : '⚔';
+      const immuneColor = this.damageType === 'magic' ? '#c084fc' : '#fca5a5';
+      game.addFloatingText(this.target.x, this.target.y - 12, 'IMMUNE', immuneColor, 13, false, this.damageType, immuneIcon);
       // BUT still apply secondary debuffs that have their own immunity logic:
       // Physical towers can carry magic debuffs (e.g. armorShred), and vice versa.
       // applyDebuff() already checks isMagicImmune for magic debuffs internally.
@@ -496,7 +507,8 @@ export class Projectile {
       if (this.effects.armorShred) this.target.applyDebuff('armorShred', this.effects.armorShred);
       if (this.effects.stun) this.target.applyDebuff('stun', this.effects.stun);
       if (this.effects.poison) this.target.applyDebuff('poison', { ...this.effects.poison, source: this.source });
-      // Record source damage for debuff kills (handled separately) — skip primary damage recording
+      // Shield block visual
+      game.addImpactRing(this.target.x, this.target.y, immuneColor, 20);
       return;
     }
 
@@ -509,15 +521,63 @@ export class Projectile {
       this.source.totalDamageDealt += res.actualDamage;
     }
 
-    // Floating combat text
-    const text = Math.round(res.actualDamage);
+    // ── Damage type visual feedback ──
+    // Determine display icon and color based on damage type and effects
     let color = '#ffffff';
-    if (res.isCrit) color = '#fbbf24';
-    else if (this.damageType === 'magic') color = '#a855f7';
-    else if (this.effects.poison) color = '#4ade80';
-    else if (this.effects.slow) color = '#38bdf8';
+    let icon = '';
+    let dmgTypeLabel = this.damageType;
 
-    game.addFloatingText(this.target.x, this.target.y - 10, text.toString(), color, 14, res.isCrit);
+    if (res.isCrit) {
+      color = '#fbbf24';
+      icon = '💥';
+      dmgTypeLabel = 'crit';
+    } else if (this.effects.chainLightning) {
+      color = '#22d3ee';
+      icon = '⚡';
+      dmgTypeLabel = 'lightning';
+    } else if (this.effects.poison) {
+      color = '#4ade80';
+      icon = '☠';
+      dmgTypeLabel = 'poison';
+    } else if (this.effects.slow) {
+      color = '#38bdf8';
+      icon = '❄';
+      dmgTypeLabel = 'ice';
+    } else if (this.effects.splash) {
+      color = '#f97316';
+      icon = '💣';
+      dmgTypeLabel = 'fire';
+    } else if (this.damageType === 'magic') {
+      color = '#a855f7';
+      icon = '✦';
+    } else {
+      color = '#f87171';
+      icon = '⚔';
+    }
+
+    // Shield hit: show cyan coloring
+    if (res.shieldHit) {
+      color = '#06b6d4';
+      icon = '🛡';
+    }
+
+    const text = Math.round(res.actualDamage);
+    game.addFloatingText(this.target.x, this.target.y - 10, text.toString(), color, 14, res.isCrit, dmgTypeLabel, icon);
+
+    // ── Hit flash on creep ──
+    if (this.target._hitFlashTimer !== undefined) {
+      this.target._hitFlashTimer = 0.12;
+      this.target._hitFlashColor = color;
+    }
+
+    // ── Impact particles & rings by damage type ──
+    game.addImpactParticles(this.target.x, this.target.y, dmgTypeLabel, res.isCrit ? 10 : 5);
+    game.addImpactRing(this.target.x, this.target.y, color, res.isCrit ? 25 : 15);
+
+    // ── Screen shake for crits and big hits ──
+    if (res.isCrit && game.renderer) {
+      game.renderer.triggerScreenShake(5, 0.15);
+    }
 
     // Apply primary debuffs to target
     if (this.effects.slow) {
@@ -539,6 +599,9 @@ export class Projectile {
       const splashRad = this.effects.splash.radius;
       const splashDmg = this.damage * this.effects.splash.ratio;
       game.addExplosionParticle(this.target.x, this.target.y, splashRad, this.color);
+      // Extra: large impact ring for splash
+      game.addImpactRing(this.target.x, this.target.y, '#f97316', splashRad);
+      if (game.renderer) game.renderer.triggerScreenShake(3, 0.12);
 
       for (const creep of game.creeps) {
         if (creep.id !== this.target.id && creep.hp > 0) {
@@ -557,6 +620,8 @@ export class Projectile {
     if (this.effects.cleave) {
       const cleaveRad = this.effects.cleave.radius;
       const cleaveDmg = this.damage * this.effects.cleave.percent;
+      // Cleave slash arc visual
+      game.addSlashParticle(this.target.x, this.target.y, cleaveRad, '#f87171');
       for (const creep of game.creeps) {
         if (creep.id !== this.target.id && creep.hp > 0) {
           const d = Math.hypot(creep.x - this.target.x, creep.y - this.target.y);
@@ -596,7 +661,8 @@ export class Projectile {
         if (nextCreep) {
           game.addLightningEffect(currentCreep.x, currentCreep.y, nextCreep.x, nextCreep.y);
           const lRes = nextCreep.takeDamage(jumpDmg, 'magic');
-          game.addFloatingText(nextCreep.x, nextCreep.y - 10, Math.round(lRes.actualDamage).toString(), '#67e8f9', 14);
+          game.addFloatingText(nextCreep.x, nextCreep.y - 10, Math.round(lRes.actualDamage).toString(), '#67e8f9', 14, false, 'lightning', '⚡');
+          game.addImpactParticles(nextCreep.x, nextCreep.y, 'lightning', 4);
           if (this.source && this.source.recordDamage) this.source.recordDamage(lRes.actualDamage);
           else if (this.source) this.source.totalDamageDealt += lRes.actualDamage;
           if (lRes.killed) game.onCreepKilled(nextCreep, this.source);

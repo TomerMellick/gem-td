@@ -54,6 +54,10 @@ export class Game {
     this.particles = [];
     this.floatingTexts = [];
     this.lightningArcs = [];
+    this.impactRings = [];
+
+    // Renderer reference for screen shake (set by main.js)
+    this.renderer = null;
 
     // Wave spawning state
     this.waveSpawnCount = 0;
@@ -763,25 +767,100 @@ export class Game {
     this.creeps = this.creeps.filter(c => c !== creep);
   }
 
-  addFloatingText(x, y, text, color, size, isCrit) {
-    this.floatingTexts.push(new FloatingText(x, y, text, color, size, isCrit));
+  addFloatingText(x, y, text, color, size, isCrit, type, icon) {
+    this.floatingTexts.push(new FloatingText(x, y, text, color, size, isCrit, type || 'physical', icon || ''));
   }
 
   addExplosionParticle(x, y, radius, color) {
-    for (let i = 0; i < 8; i++) {
-      const angle = (i * 2 * Math.PI) / 8;
-      const speed = 40 + Math.random() * 50;
+    for (let i = 0; i < 12; i++) {
+      const angle = (i * 2 * Math.PI) / 12;
+      const speed = 40 + Math.random() * 60;
+      const type = Math.random() > 0.5 ? 'ember' : 'spark';
       this.particles.push(new Particle(
         x, y, color,
         Math.cos(angle) * speed,
         Math.sin(angle) * speed,
-        3, 0.35
+        2 + Math.random() * 2, 0.4, type
       ));
     }
   }
 
   addLightningEffect(x1, y1, x2, y2) {
-    this.lightningArcs.push({ x1, y1, x2, y2, life: 0.15 });
+    this.lightningArcs.push({ x1, y1, x2, y2, life: 0.2 });
+    // Shock spark particles at target
+    for (let i = 0; i < 3; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 30 + Math.random() * 40;
+      this.particles.push(new Particle(
+        x2, y2, '#67e8f9',
+        Math.cos(angle) * speed,
+        Math.sin(angle) * speed,
+        2, 0.2, 'shock'
+      ));
+    }
+  }
+
+  // ── Type-specific impact particles ──
+  addImpactParticles(x, y, damageType = 'physical', count = 5) {
+    const IMPACT_COLORS = {
+      physical: ['#f87171', '#fca5a5', '#dc2626'],
+      magic:    ['#a855f7', '#c084fc', '#7c3aed'],
+      lightning:['#22d3ee', '#67e8f9', '#06b6d4'],
+      poison:   ['#4ade80', '#86efac', '#16a34a'],
+      fire:     ['#f97316', '#fdba74', '#ea580c'],
+      ice:      ['#38bdf8', '#7dd3fc', '#0284c7'],
+      crit:     ['#fbbf24', '#fde047', '#f59e0b'],
+    };
+    const IMPACT_TYPES = {
+      physical: 'spark',
+      magic: 'star',
+      lightning: 'shock',
+      poison: 'poison_bubble',
+      fire: 'ember',
+      ice: 'frost_flake',
+      crit: 'star',
+    };
+
+    const colors = IMPACT_COLORS[damageType] || IMPACT_COLORS.physical;
+    const particleType = IMPACT_TYPES[damageType] || 'spark';
+
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 30 + Math.random() * 70;
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      this.particles.push(new Particle(
+        x + (Math.random() - 0.5) * 6,
+        y + (Math.random() - 0.5) * 6,
+        color,
+        Math.cos(angle) * speed,
+        Math.sin(angle) * speed,
+        1.5 + Math.random() * 2.5,
+        0.25 + Math.random() * 0.2,
+        particleType
+      ));
+    }
+  }
+
+  // ── Impact ring (expanding circle at hit location) ──
+  addImpactRing(x, y, color, maxRadius = 15) {
+    this.impactRings.push({
+      x, y, color,
+      startRadius: 3,
+      maxRadius,
+      age: 0,
+      life: 0.3
+    });
+  }
+
+  // ── Slash arc particle for cleave ──
+  addSlashParticle(x, y, radius, color) {
+    const arcStart = Math.random() * Math.PI;
+    this.particles.push(new Particle(
+      x, y, color, 0, 0, radius * 0.3, 0.3, 'slash', {
+        arcStart: arcStart,
+        arcEnd: arcStart + Math.PI * 1.2
+      }
+    ));
   }
 
   /**
@@ -796,6 +875,14 @@ export class Game {
       this.lightningArcs[i].life -= dt;
       if (this.lightningArcs[i].life <= 0) {
         this.lightningArcs.splice(i, 1);
+      }
+    }
+
+    // Update impact rings
+    for (let i = this.impactRings.length - 1; i >= 0; i--) {
+      this.impactRings[i].age += dt;
+      if (this.impactRings[i].age >= this.impactRings[i].life) {
+        this.impactRings.splice(i, 1);
       }
     }
 
