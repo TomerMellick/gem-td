@@ -591,7 +591,7 @@ export class Tower {
     }
 
     // Aura handling
-    if (this.effect === 'burn_aura' && this.effectRadius > 0) {
+    if ((this.effect === 'burn_aura' || this.effect === 'forked_lightning_burn') && this.effectRadius > 0) {
       const burnDps = typeof this.effectValue === 'number' ? this.effectValue : (this.effectValue.burnDps || 80);
       for (const creep of creeps) {
         if (creep.hp > 0) {
@@ -758,6 +758,12 @@ export class Tower {
       projectileEffects.greedMax = this.effectValue.greedMax;
     }
     if (this.effect === 'cullinan_strike') {
+      projectileEffects.poison = { dps: this.effectValue.poisonDps, duration: 5.0 };
+    }
+    if (this.effect === 'aura_range_poison' && this.effectValue && this.effectValue.poisonDps) {
+      projectileEffects.poison = { dps: this.effectValue.poisonDps, duration: this.effectValue.duration || 5.0 };
+    }
+    if (this.effect === 'true_strike_aura' && this.effectValue && this.effectValue.poisonDps) {
       projectileEffects.poison = { dps: this.effectValue.poisonDps, duration: 5.0 };
     }
 
