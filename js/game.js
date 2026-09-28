@@ -32,6 +32,7 @@ export class Game {
     // Traps and interaction mode
     this.traps = [];
     this.interactionMode = null; // null | { type: 'MOVE_TOWER', sourceTower } | { type: 'PLACE_TRAP', trapKey } | { type: 'SOCKET_RUNE', runeKey }
+    this.lastWaveMvp = null; // { tower, damage, level, wave }
 
     // Grid state
     this.grid = Array.from({ length: CONFIG.GRID_HEIGHT }, () => Array(CONFIG.GRID_WIDTH).fill(TILE_TYPES.EMPTY));
@@ -59,9 +60,51 @@ export class Game {
     this.waveSpawnTimer = 0;
     this.waveInProgress = false;
 
+    // Cache structures for 60/120 FPS performance
+    this._combinableTowers = null;
+    this._towerCombinationsCache = new Map();
+    this._activeTowers = null;
+    this._allEntities = null;
+    this._cachedHoverCanPlace = null;
+    this._cachedHoverX = -1;
+    this._cachedHoverY = -1;
+    this.aurasDirty = true;
+
     // Pathfinding cache
     this.fullCreepPath = [];
     this.updateRoute();
+  }
+
+  invalidateTowerCache() {
+    this._combinableTowers = null;
+    this._towerCombinationsCache.clear();
+    this._activeTowers = null;
+    this._allEntities = null;
+    this._cachedHoverCanPlace = null;
+    this.aurasDirty = true;
+  }
+
+  _rebuildEntityLists() {
+    this._activeTowers = [];
+    this._allEntities = [];
+    for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
+      for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
+        const tower = this.towerGrid[y][x];
+        if (tower) {
+          this._allEntities.push(tower);
+          if (!tower.isSlate) {
+            this._activeTowers.push(tower);
+          }
+        }
+      }
+    }
+  }
+
+  getAllEntities() {
+    if (!this._allEntities) {
+      this._rebuildEntityLists();
+    }
+    return this._allEntities;
   }
 
   updateRoute() {
@@ -77,6 +120,18 @@ export class Game {
     if (this.phase !== GAME_PHASES.BUILDING) return false;
     if (this.placedGemsThisTurn.length >= CONFIG.GEMS_PER_ROUND) return false;
     return this.pathfinding.canPlaceAt(this.grid, x, y);
+  }
+
+  getHoverCanPlace() {
+    if (!this.hoverTile) return false;
+    const { x, y } = this.hoverTile;
+    if (this._cachedHoverX === x && this._cachedHoverY === y && this._cachedHoverCanPlace !== null) {
+      return this._cachedHoverCanPlace;
+    }
+    this._cachedHoverX = x;
+    this._cachedHoverY = y;
+    this._cachedHoverCanPlace = this.canPlaceAt(x, y);
+    return this._cachedHoverCanPlace;
   }
 
   /**
@@ -120,6 +175,7 @@ export class Game {
     this.selectedTower = tower;
 
     this.updateRoute();
+    this.invalidateTowerCache();
     SOUND.playGemPlace();
 
     // Check if 5 gems are placed
@@ -149,6 +205,7 @@ export class Game {
     this.placedGemsThisTurn = [];
     this.selectedTower = chosenTower;
     this.updateRoute();
+    this.invalidateTowerCache();
     SOUND.playKeepGem();
     this.addFloatingText(chosenTower.pixelX, chosenTower.pixelY - 20, `${chosenTower.name}!`, '#38bdf8', 16, true);
 
@@ -161,24 +218,18 @@ export class Game {
    * Get all gems currently on board (for recipe checking)
    */
   getAllGems() {
-    const list = [];
-    for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
-      for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
-        const tower = this.towerGrid[y][x];
-        if (tower && !tower.isSlate) {
-          list.push(tower);
-        }
-      }
+    if (!this._activeTowers) {
+      this._rebuildEntityLists();
     }
-    return list;
+    return this._activeTowers;
   }
 
   /**
    * Check matching recipes available with current board & placed gems
    */
   getAvailableRecipes() {
-    const allGems = this.getAllGems();
-    const codes = allGems.map(t => t.isSpecial ? t.specialName : `${t.code}${t.level}`);
+    const allGems = this.getAllGems().filter(t => !t.isSlate);
+    const codes = allGems.map(t => t.isSpecial ? t.specialName : (t.code && t.level ? `${t.code}${t.level}` : null)).filter(Boolean);
     return findMatchingRecipes(codes);
   }
 
@@ -204,8 +255,8 @@ export class Game {
 
     for (const req of reqList) {
       const idx = allGems.findIndex(g => {
-        if (consumedTowers.includes(g)) return false;
-        const code = g.isSpecial ? g.specialName : `${g.code}${g.level}`;
+        if (!g || g.isSlate || consumedTowers.includes(g)) return false;
+        const code = g.isSpecial ? g.specialName : (g.code && g.level ? `${g.code}${g.level}` : '');
         return code === req;
       });
 
@@ -231,8 +282,10 @@ export class Game {
       this.grid[t.tileY][t.tileX] = TILE_TYPES.SLATE;
     }
 
-    // Create the Special Tower at the target location
+    // Create the Special Tower at the target location and inherit highest MVP level from ingredients
     const specialTower = new Tower(targetX, targetY, { specialName: recipeName });
+    const maxMvp = Math.max(0, ...consumedTowers.map(c => c.mvpLevel || 0));
+    specialTower.mvpLevel = maxMvp;
     this.towerGrid[targetY][targetX] = specialTower;
     this.grid[targetY][targetX] = TILE_TYPES.TOWER;
     this.selectedTower = specialTower;
@@ -249,6 +302,7 @@ export class Game {
     }
 
     this.updateRoute();
+    this.invalidateTowerCache();
     SOUND.playCombine();
     this.addFloatingText(specialTower.pixelX, specialTower.pixelY - 20, `${recipeName}!`, '#fbbf24', 18, true);
 
@@ -289,6 +343,7 @@ export class Game {
     }
 
     this.updateRoute();
+    this.invalidateTowerCache();
     SOUND.playCombine();
     this.addFloatingText(keepTower.pixelX, keepTower.pixelY - 20, `${keepTower.name}!`, '#fbbf24', 16, true);
     return true;
@@ -299,8 +354,13 @@ export class Game {
    */
   getCombinationsForTower(tower) {
     if (!tower || tower.isSlate) return [];
+    if (this._towerCombinationsCache.has(tower)) {
+      return this._towerCombinationsCache.get(tower);
+    }
     const allGems = this.getAllGems();
-    return findCombinationsForTower(tower, allGems);
+    const combos = findCombinationsForTower(tower, allGems);
+    this._towerCombinationsCache.set(tower, combos);
+    return combos;
   }
 
   /**
@@ -315,13 +375,15 @@ export class Game {
    * Get set of all towers on board that currently have valid combinations
    */
   getCombinableTowers() {
+    if (this._combinableTowers) return this._combinableTowers;
     const allGems = this.getAllGems();
     const set = new Set();
     for (const g of allGems) {
-      if (findCombinationsForTower(g, allGems).length > 0) {
+      if (this.getCombinationsForTower(g).length > 0) {
         set.add(g);
       }
     }
+    this._combinableTowers = set;
     return set;
   }
 
@@ -337,7 +399,9 @@ export class Game {
 
     if (combination.type === 'special') {
       const { recipeName } = combination;
+      const inheritedMvp = Math.max(tower.mvpLevel || 0, ...partnerTowers.map(p => p.mvpLevel || 0));
       tower.initFromData({ specialName: recipeName });
+      tower.mvpLevel = inheritedMvp;
       this.selectedTower = tower;
 
       // Turn partner ingredient towers into stone slates
@@ -360,12 +424,15 @@ export class Game {
       }
 
       this.updateRoute();
+      this.invalidateTowerCache();
       SOUND.playCombine();
       this.addFloatingText(tower.pixelX, tower.pixelY - 20, `${recipeName}!`, '#fbbf24', 18, true);
       return true;
     } else if (combination.type === 'duplicate') {
       const { targetLevel, gemCode } = combination;
+      const inheritedMvp = Math.max(tower.mvpLevel || 0, ...partnerTowers.map(p => p.mvpLevel || 0));
       tower.initFromData({ code: gemCode, level: targetLevel });
+      tower.mvpLevel = inheritedMvp;
       this.selectedTower = tower;
 
       // Turn partner duplicate towers into stone slates
@@ -388,6 +455,7 @@ export class Game {
       }
 
       this.updateRoute();
+      this.invalidateTowerCache();
       SOUND.playCombine();
       this.addFloatingText(tower.pixelX, tower.pixelY - 20, `${tower.name}!`, '#fbbf24', 16, true);
       return true;
@@ -430,6 +498,7 @@ export class Game {
     this.selectedTower = null;
 
     this.updateRoute();
+    this.invalidateTowerCache();
     SOUND.playClick();
     return true;
   }
@@ -450,6 +519,7 @@ export class Game {
       t.initFromData(newGem);
     }
 
+    this.invalidateTowerCache();
     SOUND.playUpgrade();
     return true;
   }
@@ -562,6 +632,7 @@ export class Game {
     }
 
     this.updateRoute();
+    this.invalidateTowerCache();
     SOUND.playTeleport();
     this.addFloatingText(tower.pixelX, tower.pixelY - 20, 'Tower Relocated!', '#fbbf24', 16, true);
     this.selectedTower = tower;
@@ -585,6 +656,7 @@ export class Game {
 
     this.gold -= def.cost;
     tower.socketRune(runeKey);
+    this.aurasDirty = true;
     SOUND.playRuneSocket();
     this.addFloatingText(tower.pixelX, tower.pixelY - 20, `${def.name} Socketed!`, def.color, 16, true);
     return true;
@@ -615,6 +687,13 @@ export class Game {
     this.waveSpawnCount = 0;
     this.waveSpawnTimer = 0;
     this.waveInProgress = true;
+
+    // Reset wave damage counter on all active towers so every wave's MVP is freshly earned
+    const allTowers = this.getAllGems();
+    for (const t of allTowers) {
+      t.waveDamageDealt = 0;
+    }
+
     SOUND.playWaveStart();
   }
 
@@ -768,17 +847,15 @@ export class Game {
         }
       }
 
-      // Calculate tower auras before attack updates
-      this.updateTowerAuras();
+      // Calculate tower auras before attack updates only if layout/runes changed
+      if (this.aurasDirty) {
+        this.updateTowerAuras();
+      }
 
-      // Update towers
-      for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
-        for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
-          const tower = this.towerGrid[y][x];
-          if (tower) {
-            tower.update(dt, this.creeps, this);
-          }
-        }
+      // Update active non-slate towers directly
+      const activeTowers = this.getAllGems();
+      for (let i = 0; i < activeTowers.length; i++) {
+        activeTowers[i].update(dt, this.creeps, this);
       }
 
       // Update creeps
@@ -803,19 +880,16 @@ export class Game {
     }
   }
 
-  updateTowerAuras() {
+  updateTowerAuras(force = false) {
+    if (!this.aurasDirty && !force) return;
+    this.aurasDirty = false;
+
     // Reset aura buffs
-    const allTowers = [];
-    for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
-      for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
-        const tower = this.towerGrid[y][x];
-        if (tower && !tower.isSlate) {
-          tower.auraSpeedMultiplier = 1.0;
-          tower.auraDamageMultiplier = 1.0;
-          tower.auraRangeBonus = 0;
-          allTowers.push(tower);
-        }
-      }
+    const allTowers = this.getAllGems();
+    for (const tower of allTowers) {
+      tower.auraSpeedMultiplier = 1.0;
+      tower.auraDamageMultiplier = 1.0;
+      tower.auraRangeBonus = 0;
     }
 
     // Apply aura buffs from source towers
@@ -849,6 +923,17 @@ export class Game {
           }
         }
       }
+
+      // MVP Friendly Towers Damage Aura (2 tiles radius, +3% per level, up to +30% at MVP 10)
+      if (src.mvpLevel && src.mvpLevel > 0) {
+        const allyBonus = src.mvpLevel * CONFIG.MVP_ALLY_AURA_PER_LEVEL;
+        const allyRad = CONFIG.MVP_ALLY_AURA_RADIUS_TILES * CONFIG.DEFAULT_TILE_SIZE + 10;
+        for (const target of allTowers) {
+          if (target !== src && Math.hypot(target.pixelX - src.pixelX, target.pixelY - src.pixelY) <= allyRad) {
+            target.auraDamageMultiplier += allyBonus;
+          }
+        }
+      }
     }
   }
 
@@ -857,6 +942,35 @@ export class Game {
     const waveBonus = 10 + this.currentWave * 2;
     this.gold += waveBonus;
     this.addFloatingText(this.width / 2 || 400, 200, `Wave ${this.currentWave} Complete! +${waveBonus}G`, '#4ade80', 20, true);
+
+    // Calculate Round MVP Tower based on waveDamageDealt
+    const activeTowers = this.getAllGems().filter(t => !t.isSlate);
+    let mvpTower = null;
+    let maxDamage = 0;
+    for (const t of activeTowers) {
+      if ((t.waveDamageDealt || 0) > maxDamage) {
+        maxDamage = t.waveDamageDealt;
+        mvpTower = t;
+      }
+    }
+
+    if (mvpTower && maxDamage > 0) {
+      if (mvpTower.mvpLevel < CONFIG.MVP_MAX_LEVEL) {
+        mvpTower.mvpLevel++;
+      }
+      this.lastWaveMvp = {
+        tower: mvpTower,
+        damage: maxDamage,
+        level: mvpTower.mvpLevel,
+        wave: this.currentWave
+      };
+      this.aurasDirty = true;
+      SOUND.playMvpAward();
+      this.addFloatingText(mvpTower.pixelX, mvpTower.pixelY - 24, `👑 ROUND MVP! (Lvl ${mvpTower.mvpLevel})`, '#fbbf24', 18, true);
+      this.addFloatingText(mvpTower.pixelX, mvpTower.pixelY - 8, `${Math.round(maxDamage).toLocaleString()} Dmg`, '#fef08a', 14, false);
+    } else {
+      this.lastWaveMvp = null;
+    }
 
     if (this.currentWave >= WAVES.length) {
       this.phase = GAME_PHASES.VICTORY;

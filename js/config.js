@@ -28,6 +28,14 @@ export const CONFIG = {
   HEAL_CASTLE_AMOUNT: 10,
   MAX_TOWER_RUNES: 3,
 
+  // Tower MVP Mechanics (Original Gem TD)
+  MVP_MAX_LEVEL: 10,
+  MVP_SELF_DAMAGE_PER_LEVEL: 0.10,    // +10% self damage per level (up to +100% at MVP 10)
+  MVP_MAGIC_SHRED_PER_LEVEL: 0.07,    // -7% magic resistance per level (up to -70% at MVP 10)
+  MVP_MAGIC_SHRED_RADIUS: 110,        // Radius for enemy magic resistance reduction aura
+  MVP_ALLY_AURA_PER_LEVEL: 0.03,      // +3% damage aura to nearby friendly towers per level (up to +30% at MVP 10)
+  MVP_ALLY_AURA_RADIUS_TILES: 2,      // 2 tiles radius for friendly towers damage aura
+
   CHANCE_UPGRADES: [
     { level: 1, cost: 0,   chances: [1.00, 0.00, 0.00, 0.00, 0.00], label: 'Level 1: 100% Chipped' },
     { level: 2, cost: 20,  chances: [0.70, 0.30, 0.00, 0.00, 0.00], label: 'Level 2: 70% Chipped, 30% Flawed' },

@@ -9,11 +9,63 @@ export const TILE_TYPES = {
   SLATE: 4
 };
 
+// Binary Min-Heap for priority queues
+class MinHeap {
+  constructor() {
+    this.heap = [];
+  }
+
+  push(val) {
+    this.heap.push(val);
+    let idx = this.heap.length - 1;
+    while (idx > 0) {
+      const parentIdx = (idx - 1) >> 1;
+      if (this.heap[idx].f >= this.heap[parentIdx].f) break;
+      const tmp = this.heap[idx];
+      this.heap[idx] = this.heap[parentIdx];
+      this.heap[parentIdx] = tmp;
+      idx = parentIdx;
+    }
+  }
+
+  pop() {
+    if (this.heap.length === 0) return null;
+    const top = this.heap[0];
+    const last = this.heap.pop();
+    if (this.heap.length > 0) {
+      this.heap[0] = last;
+      let idx = 0;
+      const len = this.heap.length;
+      while (true) {
+        const left = (idx << 1) + 1;
+        const right = left + 1;
+        let smallest = idx;
+        if (left < len && this.heap[left].f < this.heap[smallest].f) smallest = left;
+        if (right < len && this.heap[right].f < this.heap[smallest].f) smallest = right;
+        if (smallest === idx) break;
+        const tmp = this.heap[idx];
+        this.heap[idx] = this.heap[smallest];
+        this.heap[smallest] = tmp;
+        idx = smallest;
+      }
+    }
+    return top;
+  }
+
+  get size() {
+    return this.heap.length;
+  }
+}
+
+const SQRT2 = 1.4142;
+
 export class Pathfinding {
   constructor(width = CONFIG.GRID_WIDTH, height = CONFIG.GRID_HEIGHT) {
     this.width = width;
     this.height = height;
     this.checkpoints = CONFIG.CHECKPOINTS;
+    this.currentPathSet = null;
+    this.lastCachedRoute = null;
   }
 
   isInside(x, y) {
@@ -63,7 +115,7 @@ export class Pathfinding {
         this.isPassable(grid, d.o1.x, d.o1.y) &&
         this.isPassable(grid, d.o2.x, d.o2.y)
       ) {
-        neighbors.push({ x: d.x, y: d.y, cost: 1.4142 });
+        neighbors.push({ x: d.x, y: d.y, cost: SQRT2 });
       }
     }
 
@@ -71,7 +123,7 @@ export class Pathfinding {
   }
 
   /**
-   * Compute BFS / Dijkstra flowfield to a target coordinate
+   * Compute BFS / Dijkstra flowfield to a target coordinate using MinHeap
    */
   computeFlowField(grid, targetX, targetY) {
     const dist = Array.from({ length: this.height }, () => Array(this.width).fill(Infinity));
@@ -79,31 +131,22 @@ export class Pathfinding {
 
     if (!this.isInside(targetX, targetY)) return { dist, nextStep };
 
-    const queue = [];
+    const open = new MinHeap();
     dist[targetY][targetX] = 0;
-    queue.push({ x: targetX, y: targetY });
+    open.push({ x: targetX, y: targetY, f: 0 });
 
-    // Simple priority queue or BFS using array
-    // Since edge costs are ~1 and 1.414, Dijkstra or bucketed queue works nicely
-    while (queue.length > 0) {
-      // Find lowest dist node
-      let minIdx = 0;
-      for (let i = 1; i < queue.length; i++) {
-        if (dist[queue[i].y][queue[i].x] < dist[queue[minIdx].y][queue[minIdx].x]) {
-          minIdx = i;
-        }
-      }
-      const current = queue.splice(minIdx, 1)[0];
+    while (open.size > 0) {
+      const current = open.pop();
       const currentDist = dist[current.y][current.x];
+      if (current.f > currentDist) continue;
 
       const neighbors = this.getNeighbors(grid, current.x, current.y);
       for (const n of neighbors) {
         const alt = currentDist + n.cost;
         if (alt < dist[n.y][n.x]) {
           dist[n.y][n.x] = alt;
-          // Step from neighbor n leads to current
           nextStep[n.y][n.x] = { x: current.x, y: current.y };
-          queue.push({ x: n.x, y: n.y });
+          open.push({ x: n.x, y: n.y, f: alt });
         }
       }
     }
@@ -112,35 +155,123 @@ export class Pathfinding {
   }
 
   /**
-   * Find point-to-point path between two tiles
+   * Fast A* point-to-point pathfinder with Octile distance heuristic
    */
   findPath(grid, startX, startY, endX, endY) {
-    const { dist, nextStep } = this.computeFlowField(grid, endX, endY);
-    if (dist[startY][startX] === Infinity) {
-      return null;
+    if (startX === endX && startY === endY) {
+      return [{ x: startX, y: startY }];
     }
 
-    const path = [{ x: startX, y: startY }];
-    let curr = { x: startX, y: startY };
-    const maxSteps = this.width * this.height;
-    let steps = 0;
+    const w = this.width;
+    const h = this.height;
+    const total = w * h;
+    const gScore = new Float32Array(total).fill(Infinity);
+    const parent = new Int32Array(total).fill(-1);
+    const closed = new Uint8Array(total);
 
-    while ((curr.x !== endX || curr.y !== endY) && steps < maxSteps) {
-      const next = nextStep[curr.y][curr.x];
-      if (!next) break;
-      path.push(next);
-      curr = next;
-      steps++;
+    const startIdx = startY * w + startX;
+    const endIdx = endY * w + endX;
+
+    const octile = (x1, y1, x2, y2) => {
+      const dx = Math.abs(x1 - x2);
+      const dy = Math.abs(y1 - y2);
+      return (dx + dy) + (SQRT2 - 2) * Math.min(dx, dy);
+    };
+
+    const open = new MinHeap();
+    gScore[startIdx] = 0;
+    open.push({ x: startX, y: startY, idx: startIdx, f: octile(startX, startY, endX, endY) });
+
+    while (open.size > 0) {
+      const cur = open.pop();
+      const curIdx = cur.idx;
+      if (curIdx === endIdx) {
+        // Reconstruct path
+        const path = [];
+        let curr = endIdx;
+        while (curr !== -1) {
+          path.push({ x: curr % w, y: Math.floor(curr / w) });
+          curr = parent[curr];
+        }
+        path.reverse();
+        return path;
+      }
+
+      if (closed[curIdx]) continue;
+      closed[curIdx] = 1;
+
+      const cx = cur.x;
+      const cy = cur.y;
+      const curG = gScore[curIdx];
+
+      // Cardinal neighbors
+      const card = [
+        cx + 1, cy,
+        cx - 1, cy,
+        cx, cy + 1,
+        cx, cy - 1
+      ];
+      for (let i = 0; i < 8; i += 2) {
+        const nx = card[i];
+        const ny = card[i + 1];
+        if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+          const tile = grid[ny][nx];
+          if (tile === TILE_TYPES.EMPTY || tile === TILE_TYPES.CHECKPOINT) {
+            const nIdx = ny * w + nx;
+            if (!closed[nIdx]) {
+              const tentativeG = curG + 1.0;
+              if (tentativeG < gScore[nIdx]) {
+                gScore[nIdx] = tentativeG;
+                parent[nIdx] = curIdx;
+                open.push({ x: nx, y: ny, idx: nIdx, f: tentativeG + octile(nx, ny, endX, endY) });
+              }
+            }
+          }
+        }
+      }
+
+      // Diagonal neighbors
+      const diags = [
+        cx + 1, cy + 1, cx + 1, cy, cx, cy + 1,
+        cx - 1, cy + 1, cx - 1, cy, cx, cy + 1,
+        cx + 1, cy - 1, cx + 1, cy, cx, cy - 1,
+        cx - 1, cy - 1, cx - 1, cy, cx, cy - 1
+      ];
+      for (let i = 0; i < 24; i += 6) {
+        const nx = diags[i];
+        const ny = diags[i + 1];
+        if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+          const tile = grid[ny][nx];
+          if (tile === TILE_TYPES.EMPTY || tile === TILE_TYPES.CHECKPOINT) {
+            const t1 = grid[diags[i + 3]][diags[i + 2]];
+            const t2 = grid[diags[i + 5]][diags[i + 4]];
+            if (
+              (t1 === TILE_TYPES.EMPTY || t1 === TILE_TYPES.CHECKPOINT) &&
+              (t2 === TILE_TYPES.EMPTY || t2 === TILE_TYPES.CHECKPOINT)
+            ) {
+              const nIdx = ny * w + nx;
+              if (!closed[nIdx]) {
+                const tentativeG = curG + SQRT2;
+                if (tentativeG < gScore[nIdx]) {
+                  gScore[nIdx] = tentativeG;
+                  parent[nIdx] = curIdx;
+                  open.push({ x: nx, y: ny, idx: nIdx, f: tentativeG + octile(nx, ny, endX, endY) });
+                }
+              }
+            }
+          }
+        }
+      }
     }
 
-    return path;
+    return null;
   }
 
   /**
    * Validates full course from CP0 -> CP1 -> CP2 -> CP3 -> CP4
    * Returns validity and the complete path points
    */
-  validateFullRoute(grid) {
+  validateFullRoute(grid, updateCache = true) {
     const segments = [];
     let totalLength = 0;
 
@@ -162,7 +293,12 @@ export class Pathfinding {
       totalLength += segPath.length;
     }
 
-    return { valid: true, fullPath: segments, totalLength };
+    const result = { valid: true, fullPath: segments, totalLength };
+    if (updateCache) {
+      this.lastCachedRoute = result;
+      this.currentPathSet = new Set(segments.map(p => `${p.x},${p.y}`));
+    }
+    return result;
   }
 
   /**
@@ -173,9 +309,15 @@ export class Pathfinding {
     if (this.isCheckpoint(x, y)) return false;
     if (grid[y][x] !== TILE_TYPES.EMPTY) return false;
 
-    // Temporarily place rock
+    // Fast O(1) check: If (x, y) is NOT on the currently established valid path,
+    // placing an obstacle here cannot possibly obstruct or disconnect the route.
+    if (this.currentPathSet && !this.currentPathSet.has(`${x},${y}`)) {
+      return true;
+    }
+
+    // Temporarily place rock and validate alternative bypass route
     grid[y][x] = TILE_TYPES.SLATE;
-    const testResult = this.validateFullRoute(grid);
+    const testResult = this.validateFullRoute(grid, false);
     grid[y][x] = TILE_TYPES.EMPTY; // restore
 
     return testResult.valid;

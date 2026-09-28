@@ -50,6 +50,13 @@ export class UIController {
     this.codexList = document.getElementById('codex-list');
     this.codexFilterBtns = document.querySelectorAll('.codex-filter-btn');
     this.codexSearch = document.getElementById('codex-search');
+
+    // HUD caching to eliminate DOM layout churn at 60 FPS
+    this._lastHudWave = null;
+    this._lastHudLives = null;
+    this._lastHudGold = null;
+    this._lastHudScore = null;
+    this._lastHudBanner = null;
   }
 
   bindEvents() {
@@ -460,6 +467,7 @@ export class UIController {
         SOUND.playError();
         return;
       }
+      SOUND.playClick();
       const src = (buyBtn.dataset.mode !== 'pick' && hasValidTarget) ? targetTower : null;
       this.game.interactionMode = { type: 'MOVE_TOWER', sourceTower: src };
       this.modalShop.close();
@@ -471,6 +479,7 @@ export class UIController {
         SOUND.playError();
         return;
       }
+      SOUND.playClick();
       this.game.interactionMode = { type: 'PLACE_TRAP', trapKey: trapId };
       this.modalShop.close();
       this.invalidateUI();
@@ -492,6 +501,7 @@ export class UIController {
       }
 
       // Otherwise enter board pick mode
+      SOUND.playClick();
       this.game.interactionMode = { type: 'SOCKET_RUNE', runeKey: runeId };
       this.modalShop.close();
       this.invalidateUI();
@@ -523,9 +533,7 @@ export class UIController {
     if (g.phase === GAME_PHASES.CHOOSING) {
       const placedStr = g.placedGemsThisTurn.map(t => `${t.tileX},${t.tileY},${t.code},${t.level}`).join('|');
       const selStr = g.selectedTower ? `${g.selectedTower.tileX},${g.selectedTower.tileY}` : '';
-      const dupCount = g.getAvailableDuplicateUpgrades().length;
-      const recCount = g.getAvailableRecipes().length;
-      return `CHOOSING_${placedStr}_${selStr}_${dupCount}_${recCount}_${g.gold >= CONFIG.REROLL_COST}`;
+      return `CHOOSING_${placedStr}_${selStr}_${g.gold >= CONFIG.REROLL_COST}`;
     }
     if (g.phase === GAME_PHASES.WAVE) {
       return `WAVE_${g.currentWave}_${g.creeps.length}`;
@@ -545,7 +553,7 @@ export class UIController {
     const runeKey = (t.runes || []).join(',');
     const modeKey = this.game.interactionMode ? this.game.interactionMode.type : 'none';
     const goldRelocate = this.game.gold >= CONFIG.MOVE_TOWER_COST;
-    return `tower_${t.tileX}_${t.tileY}_${t.code}_${t.level}_${t.isSpecial ? t.specialName : ''}_${t.kills}_${Math.floor(t.totalDamageDealt / 50)}_${t.getEffectiveDamage()}_${t.getEffectiveAttackSpeed()}_${t.getEffectiveRange()}_${isTemp}_${this.game.phase}_${comboKey}_${runeKey}_${modeKey}_${goldRelocate}`;
+    return `tower_${t.tileX}_${t.tileY}_${t.code}_${t.level}_${t.isSpecial ? t.specialName : ''}_${t.kills}_${Math.floor(t.totalDamageDealt / 50)}_${t.getEffectiveDamage()}_${t.getEffectiveAttackSpeed()}_${t.getEffectiveRange()}_${isTemp}_${this.game.phase}_${comboKey}_${runeKey}_${modeKey}_${goldRelocate}_${t.mvpLevel || 0}_${Math.floor((t.waveDamageDealt || 0) / 25)}`;
   }
 
   update() {
@@ -578,27 +586,54 @@ export class UIController {
   }
 
   updateHUD() {
-    this.elWave.textContent = `Wave ${this.game.currentWave} / 50`;
-    const waveData = this.game.getWaveData();
-    const traitText = waveData.trait ? ` [${waveData.trait}]` : '';
-    this.elWaveName.textContent = `${waveData.name}${traitText} • ${waveData.count} creeps`;
-
-    this.elLives.textContent = this.game.lives;
-    this.elGold.textContent = this.game.gold;
-    this.elScore.textContent = this.game.score;
-    if (this.shopGoldVal && this.modalShop && this.modalShop.open) {
-      this.shopGoldVal.textContent = this.game.gold;
+    const wave = this.game.currentWave;
+    if (this._lastHudWave !== wave) {
+      this._lastHudWave = wave;
+      this.elWave.textContent = `Wave ${wave} / 50`;
+      const waveData = this.game.getWaveData();
+      const traitText = waveData.trait ? ` [${waveData.trait}]` : '';
+      this.elWaveName.textContent = `${waveData.name}${traitText} • ${waveData.count} creeps`;
     }
 
-    // Phase Banner
+    const lives = this.game.lives;
+    if (this._lastHudLives !== lives) {
+      this._lastHudLives = lives;
+      this.elLives.textContent = lives;
+    }
+
+    const gold = this.game.gold;
+    if (this._lastHudGold !== gold) {
+      this._lastHudGold = gold;
+      this.elGold.textContent = gold;
+      if (this.shopGoldVal && this.modalShop && this.modalShop.open) {
+        this.shopGoldVal.textContent = gold;
+      }
+    }
+
+    const score = this.game.score;
+    if (this._lastHudScore !== score) {
+      this._lastHudScore = score;
+      this.elScore.textContent = score;
+    }
+
+    // Phase Banner: only re-render if banner content changes
+    let bannerHtml = '';
     if (this.game.phase === GAME_PHASES.BUILDING) {
       const placed = this.game.placedGemsThisTurn.length;
-      this.elPhaseBanner.innerHTML = `<span class="badge build">BUILDING</span> Place 5 Gems on the Maze (<strong>${placed} / 5</strong> placed)`;
+      let mvpNotice = '';
+      if (this.game.lastWaveMvp) {
+        mvpNotice = ` • <span style="color: #fbbf24;">👑 Wave ${this.game.lastWaveMvp.wave} MVP: <strong>${this.game.lastWaveMvp.tower.name}</strong> (${Math.round(this.game.lastWaveMvp.damage).toLocaleString()} dmg)</span>`;
+      }
+      bannerHtml = `<span class="badge build">BUILDING</span> Place 5 Gems on the Maze (<strong>${placed} / 5</strong> placed)${mvpNotice}`;
     } else if (this.game.phase === GAME_PHASES.CHOOSING) {
-      this.elPhaseBanner.innerHTML = `<span class="badge choose">CHOOSING</span> Select 1 Gem to keep as an active tower! The other 4 become Rocks.`;
+      bannerHtml = `<span class="badge choose">CHOOSING</span> Select 1 Gem to keep as an active tower! The other 4 become Rocks.`;
     } else if (this.game.phase === GAME_PHASES.WAVE) {
       const remaining = this.game.creeps.length;
-      this.elPhaseBanner.innerHTML = `<span class="badge wave">COMBAT</span> Wave in progress! (${remaining} enemies remaining)`;
+      bannerHtml = `<span class="badge wave">COMBAT</span> Wave in progress! (${remaining} enemies remaining)`;
+    }
+    if (this._lastHudBanner !== bannerHtml) {
+      this._lastHudBanner = bannerHtml;
+      this.elPhaseBanner.innerHTML = bannerHtml;
     }
   }
 
@@ -849,10 +884,41 @@ export class UIController {
       `;
     }
 
+    const mvpLvl = t.mvpLevel || 0;
+    const waveDmg = Math.round(t.waveDamageDealt || 0);
+    const selfDmgBonus = Math.round(mvpLvl * CONFIG.MVP_SELF_DAMAGE_PER_LEVEL * 100);
+    const magicShred = Math.round(mvpLvl * CONFIG.MVP_MAGIC_SHRED_PER_LEVEL * 100);
+    const allyAura = Math.round(mvpLvl * CONFIG.MVP_ALLY_AURA_PER_LEVEL * 100);
+
+    let mvpHtml = '';
+    if (!isTempGem) {
+      mvpHtml = `
+        <div class="inspector-section mvp-section ${mvpLvl > 0 ? 'active' : ''}">
+          <div class="mvp-header">
+            <span class="mvp-crown-icon">${mvpLvl > 0 ? '👑' : '⭐'}</span>
+            <div class="mvp-header-text">
+              <span class="mvp-title">MVP Status: <strong>${mvpLvl > 0 ? `Level ${mvpLvl} / ${CONFIG.MVP_MAX_LEVEL}` : 'Unranked'}</strong></span>
+              <span class="mvp-sub">Round Dmg: <strong>${waveDmg.toLocaleString()}</strong></span>
+            </div>
+            ${mvpLvl >= CONFIG.MVP_MAX_LEVEL ? '<span class="mvp-badge max">MAX RANK</span>' : (mvpLvl > 0 ? `<span class="mvp-badge rank">MVP ${mvpLvl}</span>` : '<span class="mvp-badge none">UNRANKED</span>')}
+          </div>
+          ${mvpLvl > 0 ? `
+            <div class="mvp-perks-list">
+              <div class="mvp-perk">⚔️ Self Damage Bonus: <strong>+${selfDmgBonus}%</strong></div>
+              <div class="mvp-perk">🔮 Enemy Magic Res Shred: <strong>-${magicShred}%</strong> (110px)</div>
+              <div class="mvp-perk">✨ Ally Damage Aura: <strong>+${allyAura}%</strong> (2 tiles)</div>
+            </div>
+          ` : `
+            <div class="mvp-hint">Top damage dealer in each wave earns an MVP rank (+10% self damage, -7% magic resistance shred aura, +3% ally aura per rank)!</div>
+          `}
+        </div>
+      `;
+    }
+
     panel.innerHTML = `
       <div class="inspector-header">
         <div class="gem-badge" style="background: ${t.gemColor}; border-color: ${t.accentColor}">
-          ${t.isSpecial ? t.name.slice(0, 2) : `${t.code}${t.level}`}
+          ${t.isSpecial ? t.name.slice(0, 2) : (t.code && t.level ? `${t.code}${t.level}` : '')}
         </div>
         <div>
           <h3>${t.name}</h3>
@@ -861,6 +927,7 @@ export class UIController {
       </div>
 
       ${combinationsHtml}
+      ${mvpHtml}
 
       <div class="inspector-stats-grid">
         <div class="stat-card">
@@ -887,6 +954,7 @@ export class UIController {
       </div>
 
       <div class="inspector-section combat-record">
+        <div>Round Damage: <strong>${waveDmg.toLocaleString()}</strong></div>
         <div>Total Damage: <strong>${Math.round(t.totalDamageDealt).toLocaleString()}</strong></div>
         <div>Total Kills: <strong>${t.kills}</strong></div>
       </div>
@@ -921,8 +989,8 @@ export class UIController {
       // 1. Placed this turn (turn options)
       for (const t of this.game.placedGemsThisTurn) {
         if (t && !t.isSlate) {
-          const code = t.isSpecial ? t.specialName : `${t.code}${t.level}`;
-          turnCodes[code] = (turnCodes[code] || 0) + 1;
+          const code = t.isSpecial ? t.specialName : (t.code && t.level ? `${t.code}${t.level}` : '');
+          if (code) turnCodes[code] = (turnCodes[code] || 0) + 1;
         }
       }
 
@@ -931,8 +999,8 @@ export class UIController {
         for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
           const tower = this.game.towerGrid[y][x];
           if (tower && !tower.isSlate && !this.game.placedGemsThisTurn.includes(tower)) {
-            const code = tower.isSpecial ? tower.specialName : `${tower.code}${tower.level}`;
-            builtCodes[code] = (builtCodes[code] || 0) + 1;
+            const code = tower.isSpecial ? tower.specialName : (tower.code && tower.level ? `${tower.code}${tower.level}` : '');
+            if (code) builtCodes[code] = (builtCodes[code] || 0) + 1;
           }
         }
       }
@@ -1039,17 +1107,17 @@ export class UIController {
       let relocateBtnHtml = '';
       if (hasValidTarget) {
         relocateBtnHtml = `
-          <button type="button" class="game-btn primary shop-buy-btn" data-action="relocate" ${canAfford ? '' : 'disabled'}>
-            ${canAfford ? `🔀 Relocate ${targetTower.name}` : `Need ${CONFIG.MOVE_TOWER_COST} Gold (Have ${gold}G)`}
+          <button type="button" class="game-btn success shop-buy-btn" data-action="relocate" ${canAfford ? '' : 'disabled'}>
+            ${canAfford ? `🛒 Buy Relocation for ${targetTower.name} (${CONFIG.MOVE_TOWER_COST}G)` : `🛒 Buy Relocation (Need ${CONFIG.MOVE_TOWER_COST}G • Have ${gold}G)`}
           </button>
           <button type="button" class="game-btn secondary shop-buy-btn" data-action="relocate" data-mode="pick" ${canAfford ? '' : 'disabled'}>
-            🎯 Pick Another Tower
+            🎯 Buy & Pick Other Tower (${CONFIG.MOVE_TOWER_COST}G)
           </button>
         `;
       } else {
         relocateBtnHtml = `
-          <button type="button" class="game-btn primary shop-buy-btn" data-action="relocate" data-mode="pick" ${canAfford ? '' : 'disabled'}>
-            ${canAfford ? '🔀 Relocate (Pick on Board)' : `Need ${CONFIG.MOVE_TOWER_COST} Gold (Have ${gold}G)`}
+          <button type="button" class="game-btn success shop-buy-btn" data-action="relocate" data-mode="pick" ${canAfford ? '' : 'disabled'}>
+            ${canAfford ? `🛒 Buy Relocation (${CONFIG.MOVE_TOWER_COST}G - Pick on Board)` : `🛒 Buy Relocation (Need ${CONFIG.MOVE_TOWER_COST}G • Have ${gold}G)`}
           </button>
         `;
       }
@@ -1095,8 +1163,8 @@ export class UIController {
             <p class="shop-card-desc">${def.description}</p>
             <div class="shop-card-stats">Radius: ${def.effectRadius}px • ${effectDetail}</div>
             <div class="shop-card-actions">
-              <button type="button" class="game-btn primary shop-buy-btn" data-action="trap" data-trap-id="${key}" ${canAfford ? '' : 'disabled'}>
-                ${canAfford ? '💣 Deploy Trap' : `Need ${def.cost} Gold (Have ${gold}G)`}
+              <button type="button" class="game-btn success shop-buy-btn" data-action="trap" data-trap-id="${key}" ${canAfford ? '' : 'disabled'}>
+                ${canAfford ? `🛒 Buy & Deploy Trap (${def.cost}G)` : `🛒 Buy Trap (Need ${def.cost}G • Have ${gold}G)`}
               </button>
             </div>
           </div>
@@ -1122,6 +1190,18 @@ export class UIController {
             ${canSlot ? '<span class="shop-target-badge ready">Ready to Socket</span>' : '<span class="shop-target-badge full">Slots Full (3/3)</span>'}
           </div>
         `;
+      } else if (targetTower && this.game.placedGemsThisTurn.includes(targetTower)) {
+        itemsHtml += `
+          <div class="shop-target-banner empty">
+            <div class="shop-target-left">
+              <span class="shop-target-icon">⚠️</span>
+              <div class="shop-target-text">
+                <div class="shop-target-title">Selected Gem is from Current Turn</div>
+                <div class="shop-target-sub">Keep this gem to lock it in, or click any rune below to buy and socket into an existing active tower!</div>
+              </div>
+            </div>
+          </div>
+        `;
       } else {
         itemsHtml += `
           <div class="shop-target-banner empty">
@@ -1129,7 +1209,7 @@ export class UIController {
               <span class="shop-target-icon">💡</span>
               <div class="shop-target-text">
                 <div class="shop-target-title">Targeting: Board Selection Mode</div>
-                <div class="shop-target-sub">Click any rune below to pick a tower on the grid, or select a tower first to socket directly!</div>
+                <div class="shop-target-sub">Click any rune below to buy and pick a tower on the grid, or select an active tower first to socket directly!</div>
               </div>
             </div>
           </div>
@@ -1144,33 +1224,33 @@ export class UIController {
         if (hasValidTarget) {
           if (!targetCanSlot) {
             actionBtnHtml = `
-              <button type="button" class="game-btn primary shop-buy-btn" disabled>
-                Tower Slots Full (3/3)
+              <button type="button" class="game-btn secondary shop-buy-btn" disabled>
+                🔒 Tower Slots Full (${CONFIG.MAX_TOWER_RUNES}/${CONFIG.MAX_TOWER_RUNES})
               </button>
-              <button type="button" class="game-btn secondary shop-buy-btn" data-action="rune" data-rune-id="${key}" data-mode="pick" ${canAfford ? '' : 'disabled'}>
-                🎯 Target on Grid
+              <button type="button" class="game-btn success shop-buy-btn" data-action="rune" data-rune-id="${key}" data-mode="pick" ${canAfford ? '' : 'disabled'}>
+                ${canAfford ? `🎯 Buy & Pick Other Tower (${def.cost}G)` : `🛒 Buy Rune (Need ${def.cost}G • Have ${gold}G)`}
               </button>
             `;
           } else if (!canAfford) {
             actionBtnHtml = `
-              <button type="button" class="game-btn primary shop-buy-btn" disabled>
-                Need ${def.cost} Gold (Have ${gold}G)
+              <button type="button" class="game-btn success shop-buy-btn" disabled>
+                🛒 Buy Rune (Need ${def.cost}G • Have ${gold}G)
               </button>
             `;
           } else {
             actionBtnHtml = `
-              <button type="button" class="game-btn primary shop-buy-btn" data-action="rune" data-rune-id="${key}">
-                ✨ Socket into ${targetTower.name}
+              <button type="button" class="game-btn success shop-buy-btn" data-action="rune" data-rune-id="${key}">
+                🛒 Buy & Socket into ${targetTower.name} (${def.cost}G)
               </button>
               <button type="button" class="game-btn secondary shop-buy-btn" data-action="rune" data-rune-id="${key}" data-mode="pick">
-                🎯 Target on Grid
+                🎯 Buy & Pick on Grid (${def.cost}G)
               </button>
             `;
           }
         } else {
           actionBtnHtml = `
-            <button type="button" class="game-btn primary shop-buy-btn" data-action="rune" data-rune-id="${key}" data-mode="pick" ${canAfford ? '' : 'disabled'}>
-              ${canAfford ? '🎯 Socket (Pick on Board)' : `Need ${def.cost} Gold (Have ${gold}G)`}
+            <button type="button" class="game-btn success shop-buy-btn" data-action="rune" data-rune-id="${key}" data-mode="pick" ${canAfford ? '' : 'disabled'}>
+              ${canAfford ? `🛒 Buy & Socket (${def.cost}G - Pick Tower)` : `🛒 Buy Rune (Need ${def.cost}G • Have ${gold}G)`}
             </button>
           `;
         }
@@ -1216,7 +1296,7 @@ export class UIController {
           <div class="shop-card-stats">Instant Castle Health Recovery</div>
           <div class="shop-card-actions">
             <button type="button" class="game-btn success shop-buy-btn" data-action="heal" ${canAfford ? '' : 'disabled'}>
-              ${canAfford ? `Repair Castle (+${CONFIG.HEAL_CASTLE_AMOUNT} Lives)` : `Need ${CONFIG.HEAL_CASTLE_COST} Gold (Have ${gold}G)`}
+              ${canAfford ? `🛒 Buy Castle Repair (+${CONFIG.HEAL_CASTLE_AMOUNT} Lives - ${CONFIG.HEAL_CASTLE_COST}G)` : `🛒 Buy Castle Repair (Need ${CONFIG.HEAL_CASTLE_COST}G • Have ${gold}G)`}
             </button>
           </div>
         </div>

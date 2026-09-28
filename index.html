@@ -49,6 +49,7 @@
             <button class="speed-btn" data-speed="4" title="Ultra Fast Speed (3)">4x</button>
             <button class="speed-btn" data-speed="0" title="Pause Game (Space)">⏸</button>
           </div>
+          <button id="btn-ai" class="icon-btn ai-btn" title="Toggle Neural AI Autoplay">🤖 AI: Off</button>
           <button id="btn-sound" class="icon-btn active" title="Toggle Sound">🔊 Sound: On</button>
           <button id="btn-shop" class="icon-btn shop-btn" title="Shop (B)">🛒 Shop</button>
           <button id="btn-codex" class="icon-btn codex-btn" title="Recipe Codex (C)">📖 Recipes</button>
@@ -56,6 +57,26 @@
         </div>
       </div>
     </header>
+
+    <!-- AI Agent Overlay Card -->
+    <div id="ai-status-card" class="ai-status-card hidden">
+      <div class="ai-card-content">
+        <div class="ai-badge-group">
+          <span class="ai-badge-pulse">●</span>
+          <span class="ai-badge-title">AI NEURAL AGENT</span>
+        </div>
+        <div class="ai-thought-bubble">
+          <span class="ai-thought-icon">🧠</span>
+          <span id="ai-thought-text">AI Initialized. Turn ON to watch the trained model play!</span>
+        </div>
+        <div class="ai-speed-controls">
+          <span class="ai-speed-label">AI Pace:</span>
+          <button class="ai-speed-btn active" data-aispeed="normal">Normal</button>
+          <button class="ai-speed-btn" data-aispeed="fast">Fast</button>
+          <button class="ai-speed-btn" data-aispeed="turbo">Turbo ⚡</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Main Game Board Container -->
     <main id="game-main">
@@ -98,7 +119,7 @@
         <button class="shop-filter-btn" data-tab="castle">🏰 Castle</button>
       </div>
     </div>
-    <div id="shop-items-list" class="dialog-scroll-content shop-grid">
+    <div id="shop-items-list" class="shop-grid">
       <!-- Injected dynamically by UIController -->
     </div>
   </dialog>

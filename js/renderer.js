@@ -105,12 +105,17 @@ export class GameRenderer {
       const cx = cp.x * ts + ts / 2;
       const cy = cp.y * ts + ts / 2;
 
-      // Glow halo
+      // Cached glow halo gradient
+      if (!this._cpGradients) this._cpGradients = new Map();
+      let grad = this._cpGradients.get(cp.id);
+      if (!grad) {
+        grad = ctx.createRadialGradient(cx, cy, 4, cx, cy, ts * 1.6);
+        grad.addColorStop(0, cp.color + 'aa');
+        grad.addColorStop(0.7, cp.color + '22');
+        grad.addColorStop(1, 'transparent');
+        this._cpGradients.set(cp.id, grad);
+      }
       ctx.save();
-      const grad = ctx.createRadialGradient(cx, cy, 4, cx, cy, ts * 1.6);
-      grad.addColorStop(0, cp.color + 'aa');
-      grad.addColorStop(0.7, cp.color + '22');
-      grad.addColorStop(1, 'transparent');
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(cx, cy, ts * 1.6, 0, Math.PI * 2);
@@ -190,8 +195,6 @@ export class GameRenderer {
       ctx.lineWidth = 2;
       ctx.setLineDash([4, 4]);
       ctx.lineDashOffset = -this.time * 25;
-      ctx.shadowColor = '#f59e0b';
-      ctx.shadowBlur = 8;
 
       for (const p of partnerSet) {
         ctx.beginPath();
@@ -202,24 +205,21 @@ export class GameRenderer {
       ctx.restore();
     }
 
-    // 2. Draw towers and slates
-    for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
-      for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
-        const tower = game.towerGrid[y][x];
-        if (!tower) continue;
+    // 2. Draw towers and slates using cached entities list
+    const entities = game.getAllEntities();
+    for (let i = 0; i < entities.length; i++) {
+      const tower = entities[i];
+      const px = tower.tileX * ts;
+      const py = tower.tileY * ts;
+      const cx = px + ts / 2;
+      const cy = py + ts / 2;
 
-        const px = x * ts;
-        const py = y * ts;
-        const cx = px + ts / 2;
-        const cy = py + ts / 2;
-
-        if (tower.isSlate) {
-          this.drawSlate(ctx, px, py, ts);
-        } else {
-          const isTemp = game.placedGemsThisTurn.includes(tower);
-          const isCombinable = combinableSet.has(tower);
-          this.drawGemTower(ctx, tower, cx, cy, ts, isTemp, isCombinable);
-        }
+      if (tower.isSlate) {
+        this.drawSlate(ctx, px, py, ts);
+      } else {
+        const isTemp = game.placedGemsThisTurn.includes(tower);
+        const isCombinable = combinableSet.has(tower);
+        this.drawGemTower(ctx, tower, cx, cy, ts, isTemp, isCombinable);
       }
     }
   }
@@ -270,8 +270,6 @@ export class GameRenderer {
       ctx.lineWidth = 2;
       ctx.setLineDash([3, 3]);
       ctx.lineDashOffset = -this.time * 15;
-      ctx.shadowColor = '#f59e0b';
-      ctx.shadowBlur = 6;
       ctx.beginPath();
       ctx.arc(cx, cy, rad + 5 + pulse, 0, Math.PI * 2);
       ctx.stroke();
@@ -281,7 +279,6 @@ export class GameRenderer {
       ctx.font = 'bold 11px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.shadowBlur = 4;
       ctx.fillText('✨', cx + rad * 0.7, cy - rad * 0.7);
       ctx.restore();
     }
@@ -352,7 +349,7 @@ export class GameRenderer {
     ctx.fillStyle = '#0f172a';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const symbol = tower.isSpecial ? tower.name.slice(0, 2).toUpperCase() : `${tower.code}${tower.level}`;
+    const symbol = tower.isSpecial ? tower.name.slice(0, 2).toUpperCase() : (tower.code && tower.level ? `${tower.code}${tower.level}` : '');
     ctx.fillText(symbol, cx, cy);
 
     // Orbiting socketed runes
@@ -369,8 +366,6 @@ export class GameRenderer {
 
         ctx.save();
         ctx.fillStyle = rDef.color;
-        ctx.shadowColor = rDef.color;
-        ctx.shadowBlur = 6;
         ctx.beginPath();
         ctx.arc(rx, ry, 3.2, 0, Math.PI * 2);
         ctx.fill();
@@ -380,6 +375,30 @@ export class GameRenderer {
         ctx.stroke();
         ctx.restore();
       }
+    }
+
+    // Tower MVP Crown & Level Badge
+    if (tower.mvpLevel && tower.mvpLevel > 0) {
+      ctx.save();
+      // Radiant golden aura if max MVP rank (10)
+      if (tower.mvpLevel >= CONFIG.MVP_MAX_LEVEL) {
+        const auraPulse = Math.sin(this.time * 4) * 2;
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 1.8;
+        ctx.setLineDash([3, 3]);
+        ctx.lineDashOffset = -this.time * 15;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad + 7 + auraPulse, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      const badgeY = cy - rad - 5;
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#fde047';
+      ctx.fillText(`👑${tower.mvpLevel}`, cx, badgeY);
+      ctx.restore();
     }
 
     ctx.restore();
@@ -449,14 +468,15 @@ export class GameRenderer {
     if (mode.type === 'MOVE_TOWER') {
       const src = mode.sourceTower;
       if (src) {
-        // Source tower glowing ring
+        // Source tower highlight ring
         ctx.save();
-        ctx.strokeStyle = '#fbbf24';
-        ctx.lineWidth = 3;
-        ctx.shadowColor = '#f59e0b';
-        ctx.shadowBlur = 10;
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+        ctx.lineWidth = 6;
         ctx.beginPath();
         ctx.arc(src.pixelX, src.pixelY, ts * 0.85, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 2.5;
         ctx.stroke();
         ctx.restore();
 
@@ -515,9 +535,9 @@ export class GameRenderer {
       }
 
       if (src) {
-        this.drawBannerNotice(ctx, '🔀 RELOCATE TOWER (40G): Click a Rock Slate (Swap) or Empty Tile. [ESC / Right-Click to Cancel]');
+        this.drawBannerNotice(ctx, `🔀 RELOCATE TOWER (${CONFIG.MOVE_TOWER_COST}G): Click a Rock Slate (Swap) or Empty Tile. [ESC / Right-Click to Cancel]`);
       } else {
-        this.drawBannerNotice(ctx, '🔀 RELOCATE TOWER (40G): Click an Active Tower to move. [ESC / Right-Click to Cancel]');
+        this.drawBannerNotice(ctx, `🔀 RELOCATE TOWER (${CONFIG.MOVE_TOWER_COST}G): Click an Active Tower to move. [ESC / Right-Click to Cancel]`);
       }
     } else if (mode.type === 'PLACE_TRAP') {
       const def = TRAP_TYPES[mode.trapKey];
@@ -623,7 +643,7 @@ export class GameRenderer {
     const py = y * ts;
 
     ctx.save();
-    const canPlace = game.canPlaceAt(x, y);
+    const canPlace = game.getHoverCanPlace();
     ctx.fillStyle = canPlace ? 'rgba(74, 222, 128, 0.3)' : 'rgba(239, 68, 68, 0.3)';
     ctx.strokeStyle = canPlace ? '#4ade80' : '#ef4444';
     ctx.lineWidth = 2;
@@ -661,6 +681,31 @@ export class GameRenderer {
       ctx.setLineDash([5, 5]);
       ctx.beginPath();
       ctx.arc(cx, cy, tower.effectRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // MVP Auras Visualization (Magic Shred & Ally Dmg)
+    if (tower.mvpLevel && tower.mvpLevel > 0) {
+      // 1. Enemy Magic Shred Aura
+      const shredRad = CONFIG.MVP_MAGIC_SHRED_RADIUS;
+      ctx.fillStyle = 'rgba(168, 85, 247, 0.05)';
+      ctx.strokeStyle = 'rgba(168, 85, 247, 0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(cx, cy, shredRad, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // 2. Friendly Ally Damage Aura
+      const allyRad = CONFIG.MVP_ALLY_AURA_RADIUS_TILES * CONFIG.DEFAULT_TILE_SIZE + 10;
+      ctx.fillStyle = 'rgba(251, 191, 36, 0.06)';
+      ctx.strokeStyle = 'rgba(251, 191, 36, 0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(cx, cy, allyRad, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }
@@ -776,12 +821,29 @@ export class GameRenderer {
   }
 
   drawLightningArcs(ctx, arcs) {
+    if (!arcs || arcs.length === 0) return;
     ctx.save();
-    ctx.strokeStyle = '#67e8f9';
-    ctx.lineWidth = 2.5;
-    ctx.shadowColor = '#06b6d4';
-    ctx.shadowBlur = 8;
+    ctx.lineCap = 'round';
 
+    // 1. Soft outer bloom
+    ctx.strokeStyle = 'rgba(6, 182, 212, 0.4)';
+    ctx.lineWidth = 5;
+    for (const arc of arcs) {
+      ctx.beginPath();
+      ctx.moveTo(arc.x1, arc.y1);
+      const steps = 4;
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        const lx = arc.x1 + (arc.x2 - arc.x1) * t + (i < steps ? (Math.random() - 0.5) * 16 : 0);
+        const ly = arc.y1 + (arc.y2 - arc.y1) * t + (i < steps ? (Math.random() - 0.5) * 16 : 0);
+        ctx.lineTo(lx, ly);
+      }
+      ctx.stroke();
+    }
+
+    // 2. Crisp inner electrical core
+    ctx.strokeStyle = '#cffafe';
+    ctx.lineWidth = 2;
     for (const arc of arcs) {
       ctx.beginPath();
       ctx.moveTo(arc.x1, arc.y1);
@@ -814,10 +876,12 @@ export class GameRenderer {
       ctx.save();
       ctx.globalAlpha = ft.alpha;
       ctx.font = `${ft.isCrit ? 'bold' : ''} ${ft.fontSize}px sans-serif`;
-      ctx.fillStyle = ft.color;
       ctx.textAlign = 'center';
-      ctx.shadowColor = '#000000';
-      ctx.shadowBlur = 4;
+      // Crisp outline without software shadow blur
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 3;
+      ctx.strokeText(ft.text, ft.x, ft.y);
+      ctx.fillStyle = ft.color;
       ctx.fillText(ft.text, ft.x, ft.y);
       ctx.restore();
     }

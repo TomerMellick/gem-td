@@ -276,6 +276,16 @@ class SoundEngine {
       setTimeout(() => this.playTone(f, 'sine', 0.2, 0.25, false), i * 60);
     });
   }
+
+  // Round MVP Award fanfare
+  playMvpAward() {
+    if (this.muted) return;
+    this.ensureContext();
+    const fanfare = [523.25, 659.25, 783.99, 1046.50, 1318.51];
+    fanfare.forEach((f, i) => {
+      setTimeout(() => this.playTone(f, 'triangle', 0.45, 0.28, false), i * 85);
+    });
+  }
 }
 
 export const SOUND = new SoundEngine();

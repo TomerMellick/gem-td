@@ -165,14 +165,16 @@ export class Creep {
     this.shieldHp = this.hasRecharge ? Math.round(this.maxHp * 0.4) : 0;
     this.maxShieldHp = this.shieldHp;
     this.timeSinceLastHit = 0;
+    this.magicResistance = 0; // Base magic resistance (0% standard)
 
     // Debuffs
     this.debuffs = {
       slow: null, // { percent, duration, timer }
-      poison: null, // { dps, timer }
+      poison: null, // { dps, timer, source }
       armorShred: null, // { reduction, timer }
+      magicShred: null, // { reduction, timer } - MVP Magic Resistance Reduction Aura
       stun: null, // { timer }
-      burn: null // { dps, timer }
+      burn: null // { dps, timer, source }
     };
   }
 
@@ -182,7 +184,7 @@ export class Creep {
   }
 
   applyDebuff(type, data) {
-    if (this.isMagicImmune && (type === 'slow' || type === 'poison' || type === 'burn')) {
+    if (this.isMagicImmune && (type === 'slow' || type === 'poison' || type === 'burn' || type === 'magicShred')) {
       return;
     }
 
@@ -192,16 +194,20 @@ export class Creep {
       }
     } else if (type === 'poison') {
       if (!this.debuffs.poison || data.dps >= this.debuffs.poison.dps) {
-        this.debuffs.poison = { dps: data.dps, timer: data.duration };
+        this.debuffs.poison = { dps: data.dps, timer: data.duration, source: data.source };
       }
     } else if (type === 'armorShred') {
       if (!this.debuffs.armorShred || data.reduction >= this.debuffs.armorShred.reduction) {
         this.debuffs.armorShred = { reduction: data.reduction, timer: data.duration };
       }
+    } else if (type === 'magicShred') {
+      if (!this.debuffs.magicShred || data.reduction >= this.debuffs.magicShred.reduction) {
+        this.debuffs.magicShred = { reduction: data.reduction, timer: data.duration || 0.35 };
+      }
     } else if (type === 'stun') {
       this.debuffs.stun = { timer: Math.max(this.debuffs.stun ? this.debuffs.stun.timer : 0, data.duration) };
     } else if (type === 'burn') {
-      this.debuffs.burn = { dps: data.dps, timer: 0.25 }; // refreshed each frame aura is active
+      this.debuffs.burn = { dps: data.dps, timer: 0.25, source: data.source }; // refreshed each frame aura is active
     }
   }
 
@@ -240,6 +246,12 @@ export class Creep {
       if (this.hasKrakenShell) {
         finalDamage = Math.max(finalDamage * 0.1, finalDamage - 400);
       }
+    } else if (damageType === 'magic') {
+      // Magic resistance & MVP Magic Shred Aura calculation
+      const shred = this.debuffs.magicShred ? this.debuffs.magicShred.reduction : 0;
+      const effectiveMagicRes = (this.magicResistance || 0) - shred;
+      // Negative magic resistance amplifies magic damage! (e.g. -0.21 -> 1.21x)
+      finalDamage = amount * (1 - effectiveMagicRes);
     }
 
     finalDamage = Math.max(1, Math.round(finalDamage));
@@ -309,13 +321,23 @@ export class Creep {
       }
     }
 
+    if (this.debuffs.magicShred) {
+      this.debuffs.magicShred.timer -= dt;
+      if (this.debuffs.magicShred.timer <= 0) {
+        this.debuffs.magicShred = null;
+      }
+    }
+
     // Poison DPS tick
     if (this.debuffs.poison) {
       this.debuffs.poison.timer -= dt;
       const poisonDmg = this.debuffs.poison.dps * dt;
       const res = this.takeDamage(poisonDmg, 'magic');
+      if (this.debuffs.poison.source && this.debuffs.poison.source.recordDamage) {
+        this.debuffs.poison.source.recordDamage(res.actualDamage);
+      }
       if (res.killed) {
-        game.onCreepKilled(this);
+        game.onCreepKilled(this, this.debuffs.poison.source);
         return;
       }
       if (this.debuffs.poison.timer <= 0) {
@@ -328,8 +350,11 @@ export class Creep {
       this.debuffs.burn.timer -= dt;
       const burnDmg = this.debuffs.burn.dps * dt;
       const res = this.takeDamage(burnDmg, 'magic');
+      if (this.debuffs.burn.source && this.debuffs.burn.source.recordDamage) {
+        this.debuffs.burn.source.recordDamage(res.actualDamage);
+      }
       if (res.killed) {
-        game.onCreepKilled(this);
+        game.onCreepKilled(this, this.debuffs.burn.source);
         return;
       }
       if (this.debuffs.burn.timer <= 0) {
@@ -433,7 +458,9 @@ export class Projectile {
     SOUND.playHit(res.isCrit);
 
     // Record damage & kill on source tower
-    if (this.source) {
+    if (this.source && this.source.recordDamage) {
+      this.source.recordDamage(res.actualDamage);
+    } else if (this.source) {
       this.source.totalDamageDealt += res.actualDamage;
     }
 
@@ -452,7 +479,7 @@ export class Projectile {
       this.target.applyDebuff('slow', this.effects.slow);
     }
     if (this.effects.poison) {
-      this.target.applyDebuff('poison', this.effects.poison);
+      this.target.applyDebuff('poison', { ...this.effects.poison, source: this.source });
     }
     if (this.effects.armorShred) {
       this.target.applyDebuff('armorShred', this.effects.armorShred);
@@ -473,7 +500,8 @@ export class Projectile {
           const d = Math.hypot(creep.x - this.target.x, creep.y - this.target.y);
           if (d <= splashRad) {
             const sRes = creep.takeDamage(splashDmg, this.damageType, this.options);
-            if (this.source) this.source.totalDamageDealt += sRes.actualDamage;
+            if (this.source && this.source.recordDamage) this.source.recordDamage(sRes.actualDamage);
+            else if (this.source) this.source.totalDamageDealt += sRes.actualDamage;
             if (sRes.killed) game.onCreepKilled(creep, this.source);
           }
         }
@@ -489,7 +517,8 @@ export class Projectile {
           const d = Math.hypot(creep.x - this.target.x, creep.y - this.target.y);
           if (d <= cleaveRad) {
             const cRes = creep.takeDamage(cleaveDmg, 'physical', this.options);
-            if (this.source) this.source.totalDamageDealt += cRes.actualDamage;
+            if (this.source && this.source.recordDamage) this.source.recordDamage(cRes.actualDamage);
+            else if (this.source) this.source.totalDamageDealt += cRes.actualDamage;
             if (this.effects.slow) creep.applyDebuff('slow', this.effects.slow);
             if (cRes.killed) game.onCreepKilled(creep, this.source);
           }
@@ -523,7 +552,8 @@ export class Projectile {
           game.addLightningEffect(currentCreep.x, currentCreep.y, nextCreep.x, nextCreep.y);
           const lRes = nextCreep.takeDamage(jumpDmg, 'magic');
           game.addFloatingText(nextCreep.x, nextCreep.y - 10, Math.round(lRes.actualDamage).toString(), '#67e8f9', 14);
-          if (this.source) this.source.totalDamageDealt += lRes.actualDamage;
+          if (this.source && this.source.recordDamage) this.source.recordDamage(lRes.actualDamage);
+          else if (this.source) this.source.totalDamageDealt += lRes.actualDamage;
           if (lRes.killed) game.onCreepKilled(nextCreep, this.source);
           hitIds.add(nextCreep.id);
           currentCreep = nextCreep;
@@ -568,7 +598,7 @@ export class Tower {
     this.specialName = '';
     this.tier = '';
     this.code = '';
-    this.level = 1;
+    this.level = 0;
     this.name = '';
 
     this.damage = 0;
@@ -584,6 +614,8 @@ export class Tower {
 
     this.cooldown = 0;
     this.totalDamageDealt = 0;
+    this.waveDamageDealt = 0;
+    this.mvpLevel = 0; // MVP status level (0 to CONFIG.MVP_MAX_LEVEL)
     this.kills = 0;
     this.runes = []; // Array of socketed rune IDs (max CONFIG.MAX_TOWER_RUNES)
 
@@ -595,6 +627,12 @@ export class Tower {
     if (gemData) {
       this.initFromData(gemData);
     }
+  }
+
+  recordDamage(amount) {
+    if (!amount || amount <= 0) return;
+    this.totalDamageDealt += amount;
+    this.waveDamageDealt += amount;
   }
 
   canSocketRune() {
@@ -613,16 +651,26 @@ export class Tower {
 
     if (gemData.isSlate) {
       this.isSlate = true;
+      this.isSpecial = false;
+      this.specialName = '';
+      this.tier = '';
+      this.code = '';
+      this.level = 0;
       this.name = 'Rock Slate';
       this.gemColor = '#475569';
       this.accentColor = '#64748b';
+      this.glowColor = null;
+      this.damage = 0;
       this.runes = [];
       return;
     }
 
     if (gemData.specialName && SPECIAL_TOWERS[gemData.specialName]) {
       this.isSpecial = true;
+      this.isSlate = false;
       this.specialName = gemData.specialName;
+      this.code = '';
+      this.level = 0;
       const def = SPECIAL_TOWERS[gemData.specialName];
       this.name = def.name;
       this.tier = def.tier;
@@ -641,6 +689,10 @@ export class Tower {
     }
 
     // Base Gem
+    this.isSpecial = false;
+    this.specialName = '';
+    this.isSlate = false;
+    this.tier = '';
     this.code = gemData.code;
     this.level = gemData.level || 1;
     const baseDef = BASE_GEMS[this.code];
@@ -663,7 +715,10 @@ export class Tower {
   turnIntoSlate() {
     this.isSlate = true;
     this.isSpecial = false;
+    this.specialName = '';
+    this.tier = '';
     this.code = '';
+    this.level = 0;
     this.name = 'Rock Slate';
     this.gemColor = '#475569';
     this.accentColor = '#64748b';
@@ -674,6 +729,10 @@ export class Tower {
 
   getEffectiveDamage() {
     let multiplier = this.auraDamageMultiplier;
+    // MVP self damage bonus (+10% per MVP level, max +100%)
+    if (this.mvpLevel && this.mvpLevel > 0) {
+      multiplier += this.mvpLevel * CONFIG.MVP_SELF_DAMAGE_PER_LEVEL;
+    }
     if (this.runes) {
       for (const rKey of this.runes) {
         const rDef = RUNE_TYPES[rKey];
@@ -718,6 +777,19 @@ export class Tower {
       this.cooldown -= dt;
     }
 
+    // MVP Magic Resistance Reduction Aura on enemies within radius
+    if (this.mvpLevel && this.mvpLevel > 0) {
+      const shredVal = this.mvpLevel * CONFIG.MVP_MAGIC_SHRED_PER_LEVEL;
+      for (const creep of creeps) {
+        if (creep.hp > 0 && !creep.isMagicImmune) {
+          const d = Math.hypot(creep.x - this.pixelX, creep.y - this.pixelY);
+          if (d <= CONFIG.MVP_MAGIC_SHRED_RADIUS) {
+            creep.applyDebuff('magicShred', { reduction: shredVal, duration: 0.35 });
+          }
+        }
+      }
+    }
+
     // Aura handling
     if ((this.effect === 'burn_aura' || this.effect === 'forked_lightning_burn') && this.effectRadius > 0) {
       const burnDps = typeof this.effectValue === 'number' ? this.effectValue : (this.effectValue.burnDps || 80);
@@ -725,7 +797,7 @@ export class Tower {
         if (creep.hp > 0) {
           const d = Math.hypot(creep.x - this.pixelX, creep.y - this.pixelY);
           if (d <= this.effectRadius) {
-            creep.applyDebuff('burn', { dps: burnDps });
+            creep.applyDebuff('burn', { dps: burnDps, source: this });
           }
         }
       }

@@ -497,7 +497,7 @@ export function findDuplicateUpgrades(placedGems) {
   const map = {};
 
   for (const gem of placedGems) {
-    if (!gem.code || !gem.level || gem.level >= 5) continue;
+    if (!gem || gem.isSpecial || gem.isSlate || !gem.code || !gem.level || gem.level >= 5) continue;
     const key = `${gem.code}${gem.level}`;
     if (!map[key]) map[key] = [];
     map[key].push(gem);
@@ -539,7 +539,8 @@ export function findCombinationsForTower(targetTower, allGems) {
   if (!targetTower || targetTower.isSlate) return [];
 
   const results = [];
-  const targetCode = targetTower.isSpecial ? targetTower.specialName : `${targetTower.code}${targetTower.level}`;
+  const targetCode = targetTower.isSpecial ? targetTower.specialName : (targetTower.code && targetTower.level ? `${targetTower.code}${targetTower.level}` : '');
+  if (!targetCode) return [];
 
   // 1. Duplicate Upgrades (for base gems < level 5)
   if (!targetTower.isSpecial && targetTower.level && targetTower.level < 5) {
@@ -595,14 +596,14 @@ export function findCombinationsForTower(targetTower, allGems) {
     remainingReqs.splice(targetIdx, 1);
 
     // Find partners among all other active gems
-    const availablePool = allGems.filter(g => g !== targetTower);
+    const availablePool = allGems.filter(g => g !== targetTower && !g.isSlate);
     const matchedPartners = [];
     let possible = true;
 
     for (const req of remainingReqs) {
       const foundIdx = availablePool.findIndex(g => {
         if (matchedPartners.includes(g)) return false;
-        const code = g.isSpecial ? g.specialName : `${g.code}${g.level}`;
+        const code = g.isSpecial ? g.specialName : (g.code && g.level ? `${g.code}${g.level}` : '');
         return code === req;
       });
 
