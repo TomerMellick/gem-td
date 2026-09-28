@@ -1,5 +1,5 @@
 // Gem TD - Canvas 2D Game Renderer
-import { CONFIG, QUALITIES } from './config.js';
+import { CONFIG, QUALITIES, TRAP_TYPES, RUNE_TYPES } from './config.js';
 import { TILE_TYPES } from './pathfinding.js';
 
 export class GameRenderer {
@@ -44,11 +44,16 @@ export class GameRenderer {
       this.drawPathPreview(ctx, game.fullCreepPath);
     }
 
+    // Draw traps on floor
+    this.drawTraps(ctx, game.traps);
+
     // Draw all placed towers & slates
     this.drawTowersAndSlates(ctx, game);
 
-    // Draw hovered tile preview
-    if (game.hoverTile) {
+    // Draw interaction mode overlay or normal hover tile
+    if (game.interactionMode) {
+      this.drawInteractionMode(ctx, game);
+    } else if (game.hoverTile) {
       this.drawHoverTile(ctx, game);
     }
 
@@ -350,6 +355,264 @@ export class GameRenderer {
     const symbol = tower.isSpecial ? tower.name.slice(0, 2).toUpperCase() : `${tower.code}${tower.level}`;
     ctx.fillText(symbol, cx, cy);
 
+    // Orbiting socketed runes
+    if (tower.runes && tower.runes.length > 0) {
+      const runeCount = tower.runes.length;
+      for (let i = 0; i < runeCount; i++) {
+        const rKey = tower.runes[i];
+        const rDef = RUNE_TYPES[rKey];
+        if (!rDef) continue;
+        const orbitAngle = this.time * 2.5 + (i * 2 * Math.PI) / runeCount;
+        const orbitDist = rad + 5.5;
+        const rx = cx + orbitDist * Math.cos(orbitAngle);
+        const ry = cy + orbitDist * Math.sin(orbitAngle);
+
+        ctx.save();
+        ctx.fillStyle = rDef.color;
+        ctx.shadowColor = rDef.color;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(rx, ry, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  drawTraps(ctx, traps) {
+    if (!traps || traps.length === 0) return;
+    const ts = this.tileSize;
+
+    for (const trap of traps) {
+      const cx = trap.pixelX;
+      const cy = trap.pixelY;
+      const def = trap.def;
+      const pulse = Math.sin(this.time * 4 + trap.tileX) * 0.15 + 0.85;
+
+      ctx.save();
+      // Floor glow
+      const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, ts * 0.8);
+      grad.addColorStop(0, def.color + '66');
+      grad.addColorStop(0.7, def.color + '22');
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, ts * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rune border sigil
+      ctx.strokeStyle = def.color;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 2]);
+      ctx.lineDashOffset = -this.time * 12;
+      ctx.beginPath();
+      ctx.arc(cx, cy, (ts * 0.42) * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Center icon
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(def.icon, cx, cy);
+
+      // Charge pips underneath
+      if (trap.maxCharges > 1) {
+        const pipRadius = 1.5;
+        const pipSpacing = 5;
+        const totalW = (trap.maxCharges - 1) * pipSpacing;
+        const startX = cx - totalW / 2;
+        const pipY = cy + ts * 0.38;
+
+        for (let c = 0; c < trap.maxCharges; c++) {
+          ctx.beginPath();
+          ctx.arc(startX + c * pipSpacing, pipY, pipRadius, 0, Math.PI * 2);
+          ctx.fillStyle = c < trap.charges ? def.color : '#475569';
+          ctx.fill();
+        }
+      }
+
+      ctx.restore();
+    }
+  }
+
+  drawInteractionMode(ctx, game) {
+    const mode = game.interactionMode;
+    if (!mode) return;
+    const ts = this.tileSize;
+
+    if (mode.type === 'MOVE_TOWER') {
+      const src = mode.sourceTower;
+      if (src) {
+        // Source tower glowing ring
+        ctx.save();
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(src.pixelX, src.pixelY, ts * 0.85, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+        // If hovered over a tile
+        if (game.hoverTile) {
+          const { x, y } = game.hoverTile;
+          const px = x * ts;
+          const py = y * ts;
+          const valid = game.canMoveTowerTo(src, x, y);
+          const destTower = game.towerGrid[y][x];
+
+          ctx.save();
+          ctx.strokeStyle = valid ? '#4ade80' : '#ef4444';
+          ctx.fillStyle = valid ? 'rgba(74, 222, 128, 0.25)' : 'rgba(239, 68, 68, 0.25)';
+          ctx.lineWidth = 2;
+          ctx.fillRect(px, py, ts, ts);
+          ctx.strokeRect(px, py, ts, ts);
+
+          // Tether line
+          ctx.strokeStyle = valid ? '#4ade80' : '#ef4444';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 4]);
+          ctx.lineDashOffset = -this.time * 20;
+          ctx.beginPath();
+          ctx.moveTo(src.pixelX, src.pixelY);
+          ctx.lineTo(px + ts / 2, py + ts / 2);
+          ctx.stroke();
+
+          // Action text
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillStyle = valid ? '#4ade80' : '#ef4444';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          const label = valid ? (destTower && destTower.isSlate ? 'SWAP SLATE 🔀' : 'MOVE HERE 🔀') : 'INVALID';
+          ctx.fillText(label, px + ts / 2, py - 4);
+          ctx.restore();
+        }
+      } else {
+        // Highlight all eligible active towers to choose which one to move
+        for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
+          for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
+            const t = game.towerGrid[y][x];
+            if (t && !t.isSlate) {
+              ctx.save();
+              ctx.strokeStyle = '#fbbf24';
+              ctx.lineWidth = 1.5;
+              ctx.setLineDash([3, 3]);
+              ctx.lineDashOffset = -this.time * 15;
+              ctx.beginPath();
+              ctx.arc(t.pixelX, t.pixelY, ts * 0.75, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.restore();
+            }
+          }
+        }
+      }
+
+      if (src) {
+        this.drawBannerNotice(ctx, '🔀 RELOCATE TOWER (40G): Click a Rock Slate (Swap) or Empty Tile. [ESC / Right-Click to Cancel]');
+      } else {
+        this.drawBannerNotice(ctx, '🔀 RELOCATE TOWER (40G): Click an Active Tower to move. [ESC / Right-Click to Cancel]');
+      }
+    } else if (mode.type === 'PLACE_TRAP') {
+      const def = TRAP_TYPES[mode.trapKey];
+      if (def && game.hoverTile) {
+        const { x, y } = game.hoverTile;
+        const px = x * ts;
+        const py = y * ts;
+        const cx = px + ts / 2;
+        const cy = py + ts / 2;
+        const valid = game.canPlaceTrapAt(x, y);
+
+        ctx.save();
+        // Effect radius preview
+        ctx.fillStyle = valid ? (def.color + '22') : 'rgba(239, 68, 68, 0.2)';
+        ctx.strokeStyle = valid ? def.color : '#ef4444';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, def.effectRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Tile box
+        ctx.strokeStyle = valid ? def.color : '#ef4444';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px, py, ts, ts);
+
+        // Icon
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(def.icon, cx, cy);
+        ctx.restore();
+      }
+
+      this.drawBannerNotice(ctx, `💣 PLACE ${def ? def.name.toUpperCase() : 'TRAP'} (${def ? def.cost : 0}G): Click on enemy path. [ESC / Right-Click to Cancel]`);
+    } else if (mode.type === 'SOCKET_RUNE') {
+      const def = RUNE_TYPES[mode.runeKey];
+
+      // Highlight all eligible towers
+      for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
+        for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
+          const t = game.towerGrid[y][x];
+          if (t && !t.isSlate && t.canSocketRune()) {
+            ctx.save();
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([3, 3]);
+            ctx.lineDashOffset = -this.time * 15;
+            ctx.beginPath();
+            ctx.arc(t.pixelX, t.pixelY, ts * 0.75, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+      }
+
+      if (game.hoverTile) {
+        const { x, y } = game.hoverTile;
+        const t = game.towerGrid[y][x];
+        const valid = !!(t && !t.isSlate && t.canSocketRune());
+
+        ctx.save();
+        const px = x * ts;
+        const py = y * ts;
+        ctx.strokeStyle = valid ? (def ? def.color : '#4ade80') : '#ef4444';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px, py, ts, ts);
+        ctx.restore();
+      }
+
+      this.drawBannerNotice(ctx, `✨ SOCKET ${def ? def.name.toUpperCase() : 'RUNE'} (${def ? def.cost : 0}G): Click an active tower. [ESC / Right-Click to Cancel]`);
+    }
+  }
+
+  drawBannerNotice(ctx, text) {
+    ctx.save();
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const textW = ctx.measureText(text).width;
+    const bannerW = textW + 30;
+    const bannerH = 26;
+    const bx = this.width / 2 - bannerW / 2;
+    const by = 12;
+
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bannerW, bannerH, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillText(text, this.width / 2, by + bannerH / 2);
     ctx.restore();
   }
 

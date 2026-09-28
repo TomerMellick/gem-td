@@ -201,6 +201,17 @@ body {
   border-color: rgba(168, 85, 247, 0.6);
 }
 
+.icon-btn.shop-btn {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.2));
+  border-color: rgba(251, 191, 36, 0.6);
+  color: #fde047;
+}
+
+.icon-btn.shop-btn:hover {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.35), rgba(245, 158, 11, 0.35));
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.4);
+}
+
 /* ================= MAIN BOARD AREA ================= */
 #game-main {
   flex: 1;
@@ -461,6 +472,139 @@ body {
   margin-left: 6px;
 }
 
+/* ================= INSPECTOR RUNES & RELOCATE ================= */
+.runes-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.4);
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.runes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.runes-header h4 {
+  font-size: 11px;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0;
+}
+
+.runes-max-badge {
+  font-size: 10px;
+  font-weight: 800;
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.rune-add-btn {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(168, 85, 247, 0.25));
+  border: 1px solid var(--primary);
+  color: #38bdf8;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.rune-add-btn:hover {
+  background: linear-gradient(135deg, #0284c7, #7c3aed);
+  color: #fff;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+.runes-pills-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rune-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid;
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.rune-pill-icon {
+  font-size: 12px;
+}
+
+.rune-pill-name {
+  font-size: 11px;
+}
+
+.rune-pill-empty {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px dashed rgba(71, 85, 105, 0.6);
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.relocate-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.relocate-btn {
+  background: linear-gradient(135deg, #334155, #1e293b);
+  border: 1px solid #64748b;
+  color: #f1f5f9;
+  width: 100%;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.relocate-btn:hover:not(:disabled) {
+  border-color: #fbbf24;
+  color: #fbbf24;
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+}
+
+.relocate-btn.active {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  border-color: #fbbf24;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.5);
+  animation: pulse-border 1.5s infinite;
+}
+
+.relocate-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 /* ================= BOTTOM ACTION DOCK ================= */
 #bottom-dock {
   min-height: 165px;
@@ -708,6 +852,17 @@ body {
   transform: scale(1.02);
 }
 
+.game-btn.success {
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  border-color: #4ade80;
+  color: #fff;
+}
+
+.game-btn.success:hover:not(:disabled) {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+}
+
 .game-btn.special-craft-btn {
   background: linear-gradient(135deg, #ea580c, #c2410c);
   border: 1px solid #fb923c;
@@ -829,6 +984,187 @@ body {
   background: #334155;
   color: #fff;
   border-color: var(--primary);
+}
+
+/* ================= SHOP MODAL ================= */
+#modal-shop {
+  max-width: 860px;
+  width: 90vw;
+}
+
+.shop-header-gold {
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #fde047;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.shop-header-gold strong {
+  font-size: 15px;
+  color: #fbbf24;
+}
+
+.shop-filter-btn {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 5px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.shop-filter-btn:hover {
+  background: #334155;
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.shop-filter-btn.active {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.3), rgba(168, 85, 247, 0.3));
+  border-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  padding: 16px 20px;
+  max-height: calc(85vh - 130px);
+  overflow-y: auto;
+}
+
+.shop-card {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
+  position: relative;
+  overflow: hidden;
+}
+
+.shop-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.shop-card.featured {
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.shop-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.shop-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.shop-card-titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.shop-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.shop-card-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shop-card-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  white-space: nowrap;
+}
+
+.shop-card-badge.trap {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.shop-card-badge.rune {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.shop-card-badge.castle {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+.shop-card-price {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.shop-card-desc {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #cbd5e1;
+  flex: 1;
+}
+
+.shop-card-stats {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: rgba(15, 23, 42, 0.5);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.shop-buy-btn {
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 #codex-search {

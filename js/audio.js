@@ -233,6 +233,49 @@ class SoundEngine {
     this.playTone(180, 'sawtooth', 0.15, 0.3, false);
     setTimeout(() => this.playTone(140, 'sawtooth', 0.2, 0.3, false), 100);
   }
+
+  // Trap armed
+  playTrapPlace() {
+    if (this.muted) return;
+    this.ensureContext();
+    this.playTone(600, 'square', 0.06, 0.15, true);
+    setTimeout(() => this.playTone(900, 'sine', 0.1, 0.15, false), 50);
+  }
+
+  // Trap triggered
+  playTrapTrigger() {
+    if (this.muted) return;
+    this.ensureContext();
+    this.playTone(280, 'sawtooth', 0.25, 0.3, true);
+    setTimeout(() => this.playTone(150, 'triangle', 0.3, 0.35, true), 40);
+  }
+
+  // Rune socketed into tower
+  playRuneSocket() {
+    if (this.muted) return;
+    this.ensureContext();
+    [587.33, 880, 1174.66, 1760].forEach((f, i) => {
+      setTimeout(() => this.playTone(f, 'sine', 0.25, 0.22, false), i * 45);
+    });
+  }
+
+  // Tower relocated / swapped
+  playTeleport() {
+    if (this.muted) return;
+    this.ensureContext();
+    [300, 450, 600, 900, 1200].forEach((f, i) => {
+      setTimeout(() => this.playTone(f, 'triangle', 0.12, 0.2, true), i * 35);
+    });
+  }
+
+  // Castle heal
+  playHeal() {
+    if (this.muted) return;
+    this.ensureContext();
+    [523, 659, 784, 1046].forEach((f, i) => {
+      setTimeout(() => this.playTone(f, 'sine', 0.2, 0.25, false), i * 60);
+    });
+  }
 }
 
 export const SOUND = new SoundEngine();

@@ -1,5 +1,5 @@
 // Gem TD - User Interface Controller
-import { CONFIG, QUALITIES, BASE_GEMS } from './config.js';
+import { CONFIG, QUALITIES, BASE_GEMS, TRAP_TYPES, RUNE_TYPES } from './config.js';
 import { SPECIAL_TOWERS } from './recipes.js';
 import { GAME_PHASES } from './game.js';
 import { SOUND } from './audio.js';
@@ -27,6 +27,7 @@ export class UIController {
 
     this.elSpeedBtns = document.querySelectorAll('.speed-btn');
     this.elSoundBtn = document.getElementById('btn-sound');
+    this.elShopBtn = document.getElementById('btn-shop');
     this.elCodexBtn = document.getElementById('btn-codex');
     this.elHelpBtn = document.getElementById('btn-help');
     this.elRestartBtn = document.getElementById('btn-restart');
@@ -35,10 +36,16 @@ export class UIController {
     this.elInspector = document.getElementById('inspector-panel');
 
     // Modals
+    this.modalShop = document.getElementById('modal-shop');
     this.modalCodex = document.getElementById('modal-codex');
     this.modalHelp = document.getElementById('modal-help');
     this.modalGameOver = document.getElementById('modal-gameover');
     this.modalVictory = document.getElementById('modal-victory');
+
+    this.shopGoldVal = document.getElementById('shop-gold-val');
+    this.shopItemsList = document.getElementById('shop-items-list');
+    this.shopFilterBtns = document.querySelectorAll('.shop-filter-btn');
+    this.activeShopTab = 'all';
 
     this.codexList = document.getElementById('codex-list');
     this.codexFilterBtns = document.querySelectorAll('.codex-filter-btn');
@@ -51,6 +58,13 @@ export class UIController {
     canvas.addEventListener('mousemove', (e) => this.onCanvasMouseMove(e));
     canvas.addEventListener('mouseleave', () => { this.game.hoverTile = null; });
     canvas.addEventListener('click', (e) => this.onCanvasClick(e));
+    canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (this.game.interactionMode) {
+        this.game.interactionMode = null;
+        this.invalidateUI();
+      }
+    });
 
     // Permanent event delegation on Bottom Dock
     this.elBottomDock.addEventListener('click', (e) => this.onDockClick(e));
@@ -59,7 +73,10 @@ export class UIController {
     // Permanent event delegation on Inspector Panel
     this.elInspector.addEventListener('click', (e) => this.onInspectorClick(e));
 
-    // Permanent event delegation on Codex List
+    // Permanent event delegation on Shop & Codex
+    if (this.shopItemsList) {
+      this.shopItemsList.addEventListener('click', (e) => this.onShopClick(e));
+    }
     if (this.codexList) {
       this.codexList.addEventListener('click', (e) => this.onCodexClick(e));
     }
@@ -81,6 +98,10 @@ export class UIController {
     });
 
     // Modals open/close
+    this.elShopBtn.addEventListener('click', () => {
+      this.openShop();
+    });
+
     this.elCodexBtn.addEventListener('click', () => {
       SOUND.playClick();
       this.updateCodexMatches();
@@ -101,7 +122,7 @@ export class UIController {
     });
 
     // Light dismiss on backdrop click
-    [this.modalCodex, this.modalHelp, this.modalGameOver, this.modalVictory].forEach(dialog => {
+    [this.modalShop, this.modalCodex, this.modalHelp, this.modalGameOver, this.modalVictory].forEach(dialog => {
       if (dialog) {
         dialog.addEventListener('click', (e) => {
           const rect = dialog.getBoundingClientRect();
@@ -128,6 +149,14 @@ export class UIController {
       });
     });
 
+    // Shop tab filters
+    this.shopFilterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        SOUND.playClick();
+        this.openShop(btn.dataset.tab || 'all');
+      });
+    });
+
     // Codex filters
     this.codexFilterBtns.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -143,7 +172,12 @@ export class UIController {
 
     // Keyboard shortcuts
     window.addEventListener('keydown', (e) => {
-      if (e.key === ' ' || e.code === 'Space') {
+      if (e.key === 'Escape') {
+        if (this.game.interactionMode) {
+          this.game.interactionMode = null;
+          this.invalidateUI();
+        }
+      } else if (e.key === ' ' || e.code === 'Space') {
         e.preventDefault();
         this.togglePause();
       } else if (e.key === '1') {
@@ -152,6 +186,9 @@ export class UIController {
         this.setSpeed(2);
       } else if (e.key === '3') {
         this.setSpeed(4);
+      } else if (e.key === 'b' || e.key === 'B') {
+        if (this.modalShop.open) this.modalShop.close();
+        else this.openShop();
       } else if (e.key === 'c' || e.key === 'C') {
         if (this.modalCodex.open) this.modalCodex.close();
         else {
@@ -203,6 +240,45 @@ export class UIController {
 
     const { x, y } = this.game.hoverTile;
     const clickedTower = this.game.towerGrid[y][x];
+
+    // Handle special interaction modes (Move Tower, Place Trap, Socket Rune)
+    if (this.game.interactionMode) {
+      const mode = this.game.interactionMode;
+      if (mode.type === 'MOVE_TOWER') {
+        if (!mode.sourceTower) {
+          if (clickedTower && !clickedTower.isSlate) {
+            mode.sourceTower = clickedTower;
+            this.game.selectedTower = clickedTower;
+            SOUND.playClick();
+          } else {
+            SOUND.playError();
+          }
+        } else {
+          if (this.game.canMoveTowerTo(mode.sourceTower, x, y)) {
+            this.game.moveTower(mode.sourceTower, x, y);
+            this.game.interactionMode = null;
+          } else {
+            SOUND.playError();
+          }
+        }
+      } else if (mode.type === 'PLACE_TRAP') {
+        if (this.game.canPlaceTrapAt(x, y)) {
+          this.game.placeTrap(mode.trapKey, x, y);
+          this.game.interactionMode = null;
+        } else {
+          SOUND.playError();
+        }
+      } else if (mode.type === 'SOCKET_RUNE') {
+        if (clickedTower && !clickedTower.isSlate && clickedTower.canSocketRune()) {
+          this.game.socketRuneToTower(clickedTower, mode.runeKey);
+          this.game.interactionMode = null;
+        } else {
+          SOUND.playError();
+        }
+      }
+      this.invalidateUI();
+      return;
+    }
 
     if (this.game.phase === GAME_PHASES.BUILDING) {
       if (!clickedTower) {
@@ -340,6 +416,21 @@ export class UIController {
       }
       return;
     }
+
+    const relocateBtn = e.target.closest('#btn-inspector-relocate');
+    if (relocateBtn && this.game.selectedTower && !this.game.selectedTower.isSlate) {
+      e.preventDefault();
+      this.game.interactionMode = { type: 'MOVE_TOWER', sourceTower: this.game.selectedTower };
+      this.invalidateUI();
+      return;
+    }
+
+    const addRuneBtn = e.target.closest('#btn-inspector-add-rune');
+    if (addRuneBtn) {
+      e.preventDefault();
+      this.openShop('runes');
+      return;
+    }
   }
 
   onCodexClick(e) {
@@ -354,11 +445,57 @@ export class UIController {
     }
   }
 
+  onShopClick(e) {
+    const buyBtn = e.target.closest('.shop-buy-btn');
+    if (!buyBtn || buyBtn.disabled) return;
+    SOUND.ensureContext();
+    const action = buyBtn.dataset.action;
+
+    if (action === 'relocate') {
+      if (this.game.gold < CONFIG.MOVE_TOWER_COST) {
+        SOUND.playError();
+        return;
+      }
+      const src = (this.game.selectedTower && !this.game.selectedTower.isSlate) ? this.game.selectedTower : null;
+      this.game.interactionMode = { type: 'MOVE_TOWER', sourceTower: src };
+      this.modalShop.close();
+      this.invalidateUI();
+    } else if (action === 'trap') {
+      const trapId = buyBtn.dataset.trapId;
+      const def = TRAP_TYPES[trapId];
+      if (!def || this.game.gold < def.cost) {
+        SOUND.playError();
+        return;
+      }
+      this.game.interactionMode = { type: 'PLACE_TRAP', trapKey: trapId };
+      this.modalShop.close();
+      this.invalidateUI();
+    } else if (action === 'rune') {
+      const runeId = buyBtn.dataset.runeId;
+      const def = RUNE_TYPES[runeId];
+      if (!def || this.game.gold < def.cost) {
+        SOUND.playError();
+        return;
+      }
+      this.game.interactionMode = { type: 'SOCKET_RUNE', runeKey: runeId };
+      this.modalShop.close();
+      this.invalidateUI();
+    } else if (action === 'heal') {
+      if (this.game.healCastle()) {
+        this.renderShop(this.activeShopTab);
+        this.invalidateUI();
+      }
+    }
+  }
+
   invalidateUI() {
     this.lastDockKey = null;
     this.lastInspectorKey = null;
     if (this.modalCodex && this.modalCodex.open) {
       this.filterCodex();
+    }
+    if (this.modalShop && this.modalShop.open) {
+      this.renderShop();
     }
   }
 
@@ -390,7 +527,10 @@ export class UIController {
     const isTemp = this.game.placedGemsThisTurn.includes(t);
     const combos = this.game.getCombinationsForTower(t);
     const comboKey = combos.map(c => `${c.type}_${c.recipeName || c.targetLevel}_${(c.partnerTowers || []).map(p => `${p.tileX},${p.tileY}`).join('-')}`).join(';');
-    return `tower_${t.tileX}_${t.tileY}_${t.code}_${t.level}_${t.isSpecial ? t.specialName : ''}_${t.kills}_${Math.floor(t.totalDamageDealt / 50)}_${t.getEffectiveDamage()}_${t.getEffectiveAttackSpeed()}_${t.getEffectiveRange()}_${isTemp}_${this.game.phase}_${comboKey}`;
+    const runeKey = (t.runes || []).join(',');
+    const modeKey = this.game.interactionMode ? this.game.interactionMode.type : 'none';
+    const goldRelocate = this.game.gold >= CONFIG.MOVE_TOWER_COST;
+    return `tower_${t.tileX}_${t.tileY}_${t.code}_${t.level}_${t.isSpecial ? t.specialName : ''}_${t.kills}_${Math.floor(t.totalDamageDealt / 50)}_${t.getEffectiveDamage()}_${t.getEffectiveAttackSpeed()}_${t.getEffectiveRange()}_${isTemp}_${this.game.phase}_${comboKey}_${runeKey}_${modeKey}_${goldRelocate}`;
   }
 
   update() {
@@ -431,6 +571,9 @@ export class UIController {
     this.elLives.textContent = this.game.lives;
     this.elGold.textContent = this.game.gold;
     this.elScore.textContent = this.game.score;
+    if (this.shopGoldVal && this.modalShop && this.modalShop.open) {
+      this.shopGoldVal.textContent = this.game.gold;
+    }
 
     // Phase Banner
     if (this.game.phase === GAME_PHASES.BUILDING) {
@@ -638,6 +781,58 @@ export class UIController {
       `;
     }
 
+    let runesHtml = '';
+    let relocateHtml = '';
+
+    if (!isUnconfirmedGem) {
+      const runes = t.runes || [];
+      const runePills = runes.map((runeKey) => {
+        const rDef = RUNE_TYPES[runeKey];
+        if (!rDef) return '';
+        return `
+          <div class="rune-pill" style="border-color: ${rDef.color}; background: ${rDef.color}22;" title="${rDef.name}: ${rDef.description}">
+            <span class="rune-pill-icon">${rDef.icon}</span>
+            <span class="rune-pill-name" style="color: ${rDef.color}">${rDef.name}</span>
+          </div>
+        `;
+      }).join('');
+
+      const emptySlotsCount = Math.max(0, CONFIG.MAX_TOWER_RUNES - runes.length);
+      let emptySlotsHtml = '';
+      for (let i = 0; i < emptySlotsCount; i++) {
+        emptySlotsHtml += `<div class="rune-pill-empty" title="Empty Rune Slot">+ Slot</div>`;
+      }
+
+      runesHtml = `
+        <div class="inspector-section runes-section">
+          <div class="runes-header">
+            <h4>Runes (${runes.length}/${CONFIG.MAX_TOWER_RUNES})</h4>
+            ${t.canSocketRune() ? `
+              <button type="button" id="btn-inspector-add-rune" class="game-btn rune-add-btn" title="Open Rune Shop">
+                + Socket Rune
+              </button>
+            ` : '<span class="runes-max-badge">MAX</span>'}
+          </div>
+          <div class="runes-pills-list">
+            ${runePills}
+            ${emptySlotsHtml}
+          </div>
+        </div>
+      `;
+
+      const canAffordRelocate = this.game.gold >= CONFIG.MOVE_TOWER_COST;
+      const isRelocating = this.game.interactionMode && this.game.interactionMode.type === 'MOVE_TOWER' && this.game.interactionMode.sourceTower === t;
+
+      relocateHtml = `
+        <div class="inspector-section relocate-section">
+          <button type="button" id="btn-inspector-relocate" class="game-btn relocate-btn ${isRelocating ? 'active' : ''}" ${canAffordRelocate ? '' : 'disabled'}>
+            ${isRelocating ? '🎯 Destination Mode Active' : `🔀 Relocate Tower (${CONFIG.MOVE_TOWER_COST} Gold)`}
+          </button>
+          <span class="relocate-hint">Swap with any Rock Slate, or move to empty space.</span>
+        </div>
+      `;
+    }
+
     panel.innerHTML = `
       <div class="inspector-header">
         <div class="gem-badge" style="background: ${t.gemColor}; border-color: ${t.accentColor}">
@@ -679,6 +874,9 @@ export class UIController {
         <div>Total Damage: <strong>${Math.round(t.totalDamageDealt).toLocaleString()}</strong></div>
         <div>Total Kills: <strong>${t.kills}</strong></div>
       </div>
+
+      ${runesHtml}
+      ${relocateHtml}
 
       ${isUnconfirmedGem ? `
         <div class="actions" style="margin-top: 8px;">
@@ -789,5 +987,135 @@ export class UIController {
 
   updateCodexMatches() {
     this.filterCodex();
+  }
+
+  openShop(tab = 'all') {
+    SOUND.playClick();
+    this.activeShopTab = tab;
+    this.renderShop(tab);
+    if (!this.modalShop.open) {
+      this.modalShop.showModal();
+    }
+  }
+
+  renderShop(tab = this.activeShopTab || 'all') {
+    this.activeShopTab = tab;
+    if (this.shopGoldVal) {
+      this.shopGoldVal.textContent = this.game.gold;
+    }
+
+    if (this.shopFilterBtns) {
+      this.shopFilterBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+      });
+    }
+
+    if (!this.shopItemsList) return;
+
+    let itemsHtml = '';
+    const gold = this.game.gold;
+
+    // 1. Relocation Card
+    if (tab === 'all' || tab === 'relocate') {
+      const canAfford = gold >= CONFIG.MOVE_TOWER_COST;
+      itemsHtml += `
+        <div class="shop-card ${canAfford ? 'featured' : ''}">
+          <div class="shop-card-header">
+            <div class="shop-card-icon">🔀</div>
+            <div class="shop-card-titles">
+              <div class="shop-card-title-row">
+                <span class="shop-card-name">Tower Relocation</span>
+                <span class="shop-card-badge">Tactics</span>
+              </div>
+              <div class="shop-card-price">🪙 ${CONFIG.MOVE_TOWER_COST} Gold</div>
+            </div>
+          </div>
+          <p class="shop-card-desc">Move an active tower to a new tile. Swap with any Rock Slate (100% pathing safe), or move to empty space (leaves a barrier rock in old spot to keep your maze intact).</p>
+          <div class="shop-card-stats">Pathing Protected • Maze Maintained</div>
+          <button type="button" class="game-btn primary shop-buy-btn" data-action="relocate" ${canAfford ? '' : 'disabled'}>
+            Relocate Tower
+          </button>
+        </div>
+      `;
+    }
+
+    // 2. Traps Cards
+    if (tab === 'all' || tab === 'traps') {
+      for (const [key, def] of Object.entries(TRAP_TYPES)) {
+        const canAfford = gold >= def.cost;
+        const effectDetail = def.damage ? `${def.damage} ${def.damageType} Dmg` : (def.slowPercent ? `${Math.round(def.slowPercent * 100)}% Slow` : (def.stunDuration ? `${def.stunDuration}s Stun` : `${def.armorReduction} Armor Strip`));
+        itemsHtml += `
+          <div class="shop-card ${canAfford ? 'featured' : ''}">
+            <div class="shop-card-header">
+              <div class="shop-card-icon" style="background: ${def.color}22; border-color: ${def.color}55;">${def.icon}</div>
+              <div class="shop-card-titles">
+                <div class="shop-card-title-row">
+                  <span class="shop-card-name">${def.name}</span>
+                  <span class="shop-card-badge trap">${def.charges} Charge${def.charges > 1 ? 's' : ''}</span>
+                </div>
+                <div class="shop-card-price">🪙 ${def.cost} Gold</div>
+              </div>
+            </div>
+            <p class="shop-card-desc">${def.description}</p>
+            <div class="shop-card-stats">Radius: ${def.effectRadius}px • ${effectDetail}</div>
+            <button type="button" class="game-btn primary shop-buy-btn" data-action="trap" data-trap-id="${key}" ${canAfford ? '' : 'disabled'}>
+              Deploy Trap
+            </button>
+          </div>
+        `;
+      }
+    }
+
+    // 3. Runes Cards
+    if (tab === 'all' || tab === 'runes') {
+      for (const [key, def] of Object.entries(RUNE_TYPES)) {
+        const canAfford = gold >= def.cost;
+        itemsHtml += `
+          <div class="shop-card ${canAfford ? 'featured' : ''}">
+            <div class="shop-card-header">
+              <div class="shop-card-icon" style="background: ${def.color}22; border-color: ${def.color}55;">${def.icon}</div>
+              <div class="shop-card-titles">
+                <div class="shop-card-title-row">
+                  <span class="shop-card-name">${def.name}</span>
+                  <span class="shop-card-badge rune">Rune</span>
+                </div>
+                <div class="shop-card-price">🪙 ${def.cost} Gold</div>
+              </div>
+            </div>
+            <p class="shop-card-desc">${def.description}</p>
+            <div class="shop-card-stats">Socket Max: ${CONFIG.MAX_TOWER_RUNES} Runes / Tower</div>
+            <button type="button" class="game-btn primary shop-buy-btn" data-action="rune" data-rune-id="${key}" ${canAfford ? '' : 'disabled'}>
+              Socket Rune
+            </button>
+          </div>
+        `;
+      }
+    }
+
+    // 4. Castle Repair Card
+    if (tab === 'all' || tab === 'castle') {
+      const canAfford = gold >= CONFIG.HEAL_CASTLE_COST;
+      itemsHtml += `
+        <div class="shop-card ${canAfford ? 'featured' : ''}">
+          <div class="shop-card-header">
+            <div class="shop-card-icon" style="background: rgba(74, 222, 128, 0.2); border-color: rgba(74, 222, 128, 0.5);">🏰</div>
+            <div class="shop-card-titles">
+              <div class="shop-card-title-row">
+                <span class="shop-card-name">Fortify Castle</span>
+                <span class="shop-card-badge castle">+${CONFIG.HEAL_CASTLE_AMOUNT} Lives</span>
+              </div>
+              <div class="shop-card-price">🪙 ${CONFIG.HEAL_CASTLE_COST} Gold</div>
+            </div>
+          </div>
+          <p class="shop-card-desc">Repair and reinforce the Gem Castle to restore +${CONFIG.HEAL_CASTLE_AMOUNT} lives! Current castle lives: <strong>${this.game.lives}</strong>. Crucial for surviving high waves and boss leaks.</p>
+          <div class="shop-card-stats">Instant Castle Health Recovery</div>
+          <button type="button" class="game-btn success shop-buy-btn" data-action="heal" ${canAfford ? '' : 'disabled'}>
+            Repair Castle (+${CONFIG.HEAL_CASTLE_AMOUNT} Lives)
+          </button>
+        </div>
+      `;
+    }
+
+    this.shopItemsList.innerHTML = itemsHtml;
   }
 }

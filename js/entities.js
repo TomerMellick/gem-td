@@ -1,7 +1,85 @@
-// Gem TD - Entities: Creeps, Towers, Projectiles, Particles, Floating Text
-import { CONFIG, QUALITIES, BASE_GEMS } from './config.js';
+// Gem TD - Entities: Creeps, Towers, Traps, Projectiles, Particles, Floating Text
+import { CONFIG, QUALITIES, BASE_GEMS, TRAP_TYPES, RUNE_TYPES } from './config.js';
 import { SPECIAL_TOWERS } from './recipes.js';
 import { SOUND } from './audio.js';
+
+export class Trap {
+  constructor(tileX, tileY, trapType, tileSize = CONFIG.DEFAULT_TILE_SIZE) {
+    this.id = Math.random().toString(36).substring(2, 9);
+    this.tileX = tileX;
+    this.tileY = tileY;
+    this.pixelX = tileX * tileSize + tileSize / 2;
+    this.pixelY = tileY * tileSize + tileSize / 2;
+    this.tileSize = tileSize;
+
+    this.type = trapType.id;
+    this.def = trapType;
+    this.charges = trapType.charges || 1;
+    this.maxCharges = this.charges;
+    this.triggerRadius = trapType.triggerRadius || 18;
+    this.effectRadius = trapType.effectRadius || 60;
+    this.isDead = false;
+    this.cooldown = 0;
+    this.age = 0;
+  }
+
+  update(dt) {
+    this.age += dt;
+    if (this.cooldown > 0) this.cooldown -= dt;
+  }
+
+  canTrigger() {
+    return !this.isDead && this.cooldown <= 0;
+  }
+
+  trigger(triggerCreep, game) {
+    if (!this.canTrigger()) return;
+
+    this.cooldown = 0.5; // Brief cooldown before next charge triggers
+    this.charges--;
+
+    SOUND.playTrapTrigger();
+
+    // Visual effect: burst ring & particles
+    game.addExplosionParticle(this.pixelX, this.pixelY, this.effectRadius, this.def.color);
+
+    // Apply effects to all creeps within effectRadius
+    for (const creep of game.creeps) {
+      if (creep.hp <= 0) continue;
+      const dist = Math.hypot(creep.x - this.pixelX, creep.y - this.pixelY);
+      if (dist <= this.effectRadius) {
+        // 1. Damage
+        if (this.def.damage) {
+          const res = creep.takeDamage(this.def.damage, this.def.damageType || 'physical');
+          const color = this.def.damageType === 'magic' ? '#a855f7' : '#f87171';
+          game.addFloatingText(creep.x, creep.y - 12, Math.round(res.actualDamage).toString(), color, 14);
+          if (res.killed) game.onCreepKilled(creep);
+        }
+
+        // 2. Slow
+        if (this.def.slowPercent) {
+          creep.applyDebuff('slow', { percent: this.def.slowPercent, duration: this.def.slowDuration || 4.0 });
+        }
+
+        // 3. Armor shred
+        if (this.def.armorReduction) {
+          creep.applyDebuff('armorShred', { reduction: this.def.armorReduction, duration: this.def.duration || 5.0 });
+        }
+
+        // 4. Stun
+        if (this.def.stunDuration) {
+          creep.applyDebuff('stun', { duration: this.def.stunDuration });
+        }
+      }
+    }
+
+    game.addFloatingText(this.pixelX, this.pixelY - 18, `${this.def.name}!`, this.def.color, 14, true);
+
+    if (this.charges <= 0) {
+      this.isDead = true;
+    }
+  }
+}
 
 export class FloatingText {
   constructor(x, y, text, color = '#ffffff', fontSize = 14, isCrit = false) {
@@ -464,6 +542,13 @@ export class Projectile {
       SOUND.playKill();
     }
 
+    // Midas rune gold extraction
+    if (this.effects.runeGold && Math.random() < this.effects.runeGold.chance) {
+      game.gold += this.effects.runeGold.amount;
+      game.addFloatingText(this.target.x, this.target.y - 25, `+${this.effects.runeGold.amount}G (Midas)`, '#fbbf24', 14);
+      SOUND.playKill();
+    }
+
     if (res.killed) {
       game.onCreepKilled(this.target, this.source);
     }
@@ -500,6 +585,7 @@ export class Tower {
     this.cooldown = 0;
     this.totalDamageDealt = 0;
     this.kills = 0;
+    this.runes = []; // Array of socketed rune IDs (max CONFIG.MAX_TOWER_RUNES)
 
     // Temporary buffs from ally auras
     this.auraSpeedMultiplier = 1.0;
@@ -511,12 +597,26 @@ export class Tower {
     }
   }
 
+  canSocketRune() {
+    return !this.isSlate && (this.runes ? this.runes.length : 0) < CONFIG.MAX_TOWER_RUNES;
+  }
+
+  socketRune(runeKey) {
+    if (!this.canSocketRune()) return false;
+    if (!this.runes) this.runes = [];
+    this.runes.push(runeKey);
+    return true;
+  }
+
   initFromData(gemData) {
+    if (!this.runes) this.runes = [];
+
     if (gemData.isSlate) {
       this.isSlate = true;
       this.name = 'Rock Slate';
       this.gemColor = '#475569';
       this.accentColor = '#64748b';
+      this.runes = [];
       return;
     }
 
@@ -569,18 +669,46 @@ export class Tower {
     this.accentColor = '#64748b';
     this.glowColor = null;
     this.damage = 0;
+    this.runes = [];
   }
 
   getEffectiveDamage() {
-    return Math.round(this.damage * this.auraDamageMultiplier);
+    let multiplier = this.auraDamageMultiplier;
+    if (this.runes) {
+      for (const rKey of this.runes) {
+        const rDef = RUNE_TYPES[rKey];
+        if (rDef && rDef.damageBonus) {
+          multiplier += rDef.damageBonus;
+        }
+      }
+    }
+    return Math.round(this.damage * multiplier);
   }
 
   getEffectiveAttackSpeed() {
-    return this.attackSpeed * this.auraSpeedMultiplier;
+    let multiplier = this.auraSpeedMultiplier;
+    if (this.runes) {
+      for (const rKey of this.runes) {
+        const rDef = RUNE_TYPES[rKey];
+        if (rDef && rDef.speedBonus) {
+          multiplier += rDef.speedBonus;
+        }
+      }
+    }
+    return this.attackSpeed * multiplier;
   }
 
   getEffectiveRange() {
-    return this.range + this.auraRangeBonus;
+    let bonus = this.auraRangeBonus;
+    if (this.runes) {
+      for (const rKey of this.runes) {
+        const rDef = RUNE_TYPES[rKey];
+        if (rDef && rDef.rangeBonus) {
+          bonus += rDef.rangeBonus;
+        }
+      }
+    }
+    return this.range + bonus;
   }
 
   update(dt, creeps, game) {
@@ -765,6 +893,35 @@ export class Tower {
     }
     if (this.effect === 'true_strike_aura' && this.effectValue && this.effectValue.poisonDps) {
       projectileEffects.poison = { dps: this.effectValue.poisonDps, duration: 5.0 };
+    }
+
+    // Apply socketed rune effects
+    if (this.runes && this.runes.length > 0) {
+      for (const rKey of this.runes) {
+        const rDef = RUNE_TYPES[rKey];
+        if (!rDef) continue;
+
+        if (rDef.trueStrike) {
+          projectileOptions.trueStrike = true;
+        }
+
+        if (rDef.critChance && Math.random() < rDef.critChance) {
+          damage *= (rDef.critMultiplier || 2.0);
+          projectileOptions.isCrit = true;
+        }
+
+        if (rDef.slowPercent) {
+          projectileEffects.slow = { percent: rDef.slowPercent, duration: rDef.slowDuration || 3.5 };
+        }
+
+        if (rDef.poisonDps) {
+          projectileEffects.poison = { dps: rDef.poisonDps, duration: rDef.poisonDuration || 4.5 };
+        }
+
+        if (rDef.bonusGoldChance) {
+          projectileEffects.runeGold = { chance: rDef.bonusGoldChance, amount: rDef.bonusGold || 3 };
+        }
+      }
     }
 
     SOUND.playShoot(this.effect);

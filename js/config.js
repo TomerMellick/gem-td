@@ -19,10 +19,14 @@ export const CONFIG = {
   CREEPS_PER_WAVE: 10,
   SPAWN_INTERVAL_MS: 900,
 
-  // Costs
+  // Costs & Gold Sinks
   SLATE_REMOVE_COST: 15,
   REROLL_COST: 20,
   DOWNGRADE_COST: 10,
+  MOVE_TOWER_COST: 40,
+  HEAL_CASTLE_COST: 75,
+  HEAL_CASTLE_AMOUNT: 10,
+  MAX_TOWER_RUNES: 3,
 
   CHANCE_UPGRADES: [
     { level: 1, cost: 0,   chances: [1.00, 0.00, 0.00, 0.00, 0.00], label: 'Level 1: 100% Chipped' },
@@ -32,6 +36,142 @@ export const CONFIG = {
     { level: 5, cost: 350, chances: [0.10, 0.25, 0.35, 0.25, 0.05], label: 'Level 5: 10% Chipped, 25% Flawed, 35% Reg, 25% Flawless, 5% Perfect' },
     { level: 6, cost: 800, chances: [0.05, 0.15, 0.30, 0.35, 0.15], label: 'Level 6: 5% Chipped, 15% Flawed, 30% Reg, 35% Flawless, 15% Perfect' }
   ]
+};
+
+export const TRAP_TYPES = {
+  spike: {
+    id: 'spike',
+    name: 'Caltrop Spikes',
+    cost: 25,
+    icon: '🗡️',
+    color: '#f87171',
+    glow: '#ef4444',
+    charges: 3,
+    triggerRadius: 18,
+    effectRadius: 35,
+    damage: 350,
+    damageType: 'physical',
+    description: '3 Charges: Deals 350 physical damage to creeps stepping on it.'
+  },
+  frost: {
+    id: 'frost',
+    name: 'Frost Sigil',
+    cost: 35,
+    icon: '❄️',
+    color: '#38bdf8',
+    glow: '#0284c7',
+    charges: 2,
+    triggerRadius: 18,
+    effectRadius: 75,
+    slowPercent: 0.65,
+    slowDuration: 4.5,
+    description: '2 Charges: Freezes nearby enemies with a 65% slow for 4.5 seconds.'
+  },
+  explosive: {
+    id: 'explosive',
+    name: 'Explosive Mine',
+    cost: 50,
+    icon: '💣',
+    color: '#fb923c',
+    glow: '#ea580c',
+    charges: 1,
+    triggerRadius: 18,
+    effectRadius: 85,
+    damage: 800,
+    damageType: 'magic',
+    description: '1 Charge: Detonates a violent blast dealing 800 Magic AoE damage.'
+  },
+  tar: {
+    id: 'tar',
+    name: 'Acid Tar Trap',
+    cost: 35,
+    icon: '🧪',
+    color: '#a855f7',
+    glow: '#7e22ce',
+    charges: 2,
+    triggerRadius: 18,
+    effectRadius: 65,
+    armorReduction: 25,
+    slowPercent: 0.35,
+    duration: 6.0,
+    description: '2 Charges: Strips 25 armor and slows enemies by 35% for 6.0 seconds.'
+  },
+  stun: {
+    id: 'stun',
+    name: 'Arcane Snare',
+    cost: 45,
+    icon: '⚡',
+    color: '#fbbf24',
+    glow: '#d97706',
+    charges: 2,
+    triggerRadius: 18,
+    effectRadius: 60,
+    stunDuration: 2.2,
+    description: '2 Charges: Shock traps that paralyze all nearby creeps for 2.2 seconds.'
+  }
+};
+
+export const RUNE_TYPES = {
+  haste: {
+    id: 'haste',
+    name: 'Rune of Swiftness',
+    cost: 60,
+    icon: '⚡',
+    color: '#38bdf8',
+    speedBonus: 0.35,
+    description: '+35% Attack Speed to the socketed tower.'
+  },
+  ferocity: {
+    id: 'ferocity',
+    name: 'Rune of Ferocity',
+    cost: 75,
+    icon: '🔥',
+    color: '#f87171',
+    damageBonus: 0.40,
+    critChance: 0.20,
+    critMultiplier: 2.5,
+    description: '+40% Base Damage and +20% Critical Strike (2.5x).'
+  },
+  range: {
+    id: 'range',
+    name: 'Rune of Eagle Eye',
+    cost: 50,
+    icon: '🎯',
+    color: '#34d399',
+    rangeBonus: 50,
+    trueStrike: true,
+    description: '+50 Attack Range and True Strike (attacks never miss evasion).'
+  },
+  frost: {
+    id: 'frost',
+    name: 'Rune of Glaciation',
+    cost: 65,
+    icon: '❄️',
+    color: '#67e8f9',
+    slowPercent: 0.35,
+    slowDuration: 3.5,
+    description: 'Attacks chill targets with a 35% movement slow for 3.5s.'
+  },
+  venom: {
+    id: 'venom',
+    name: 'Rune of Venom',
+    cost: 70,
+    icon: '🧪',
+    color: '#4ade80',
+    poisonDps: 180,
+    poisonDuration: 4.5,
+    description: 'Attacks coat enemies in venom dealing 180 Magic Poison DPS.'
+  },
+  midas: {
+    id: 'midas',
+    name: 'Rune of Midas',
+    cost: 90,
+    icon: '🪙',
+    color: '#fbbf24',
+    bonusGoldChance: 0.25,
+    bonusGold: 3,
+    description: '25% chance to extract +3 bonus gold on every attack hit.'
+  }
 };
 
 export const QUALITIES = {

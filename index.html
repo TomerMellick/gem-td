@@ -50,6 +50,7 @@
             <button class="speed-btn" data-speed="0" title="Pause Game (Space)">⏸</button>
           </div>
           <button id="btn-sound" class="icon-btn active" title="Toggle Sound">🔊 Sound: On</button>
+          <button id="btn-shop" class="icon-btn shop-btn" title="Shop (B)">🛒 Shop</button>
           <button id="btn-codex" class="icon-btn codex-btn" title="Recipe Codex (C)">📖 Recipes</button>
           <button id="btn-help" class="icon-btn" title="How to Play">❓ Guide</button>
         </div>
@@ -75,6 +76,32 @@
       <!-- Injected dynamically by UIController -->
     </footer>
   </div>
+
+  <!-- Marketplace Shop Modal -->
+  <dialog id="modal-shop" class="game-dialog">
+    <div class="dialog-header">
+      <div class="dialog-title">
+        <span class="icon">🛒</span>
+        <h2>Marketplace & Gold Shop</h2>
+      </div>
+      <div class="shop-header-gold">
+        <span>🪙 Available Gold: <strong id="shop-gold-val">0</strong></span>
+      </div>
+      <button class="modal-close" aria-label="Close dialog">&times;</button>
+    </div>
+    <div class="dialog-controls">
+      <div class="filter-tabs">
+        <button class="shop-filter-btn active" data-tab="all">All Items</button>
+        <button class="shop-filter-btn" data-tab="relocate">🔀 Relocation</button>
+        <button class="shop-filter-btn" data-tab="traps">💣 Traps</button>
+        <button class="shop-filter-btn" data-tab="runes">✨ Runes</button>
+        <button class="shop-filter-btn" data-tab="castle">🏰 Castle</button>
+      </div>
+    </div>
+    <div id="shop-items-list" class="dialog-scroll-content shop-grid">
+      <!-- Injected dynamically by UIController -->
+    </div>
+  </dialog>
 
   <!-- Recipe Codex Modal -->
   <dialog id="modal-codex" class="game-dialog">
@@ -140,17 +167,25 @@
       </section>
 
       <section>
-        <h3>⭐ Upgrades & Economy</h3>
+        <h3>⭐ Upgrades & Marketplace</h3>
         <ul>
           <li><strong>Upgrade Chances:</strong> Spend gold to increase the probability of rolling higher tier gems (Chipped &rarr; Flawed &rarr; Regular &rarr; Flawless &rarr; Perfect).</li>
           <li><strong>Demolish Slates:</strong> Pay 15 Gold to remove unwanted rocks and adjust your maze paths.</li>
           <li><strong>Reroll:</strong> Spend 20 Gold in Choosing Phase to re-roll all 5 placed gems.</li>
+          <li><strong>🛒 Marketplace (Hotkey B):</strong> Make gold useful all game long!
+            <ul>
+              <li><strong>🔀 Relocation (40 Gold):</strong> Move or swap any active tower. Swapping with a rock slate is 100% pathing safe!</li>
+              <li><strong>💣 Tactical Path Traps:</strong> Place Spikes, Frost Sigils, Explosive Mines, Acid Tar, or Arcane Snares directly on creep paths.</li>
+              <li><strong>✨ Socketable Runes:</strong> Socket up to 3 runes per tower (+Speed, +Damage/Crit, +Range/True Strike, Chilling Slow, Venom DPS, or Midas Gold).</li>
+              <li><strong>🏰 Repair Castle (75 Gold):</strong> Recover +10 Castle Lives to survive difficult waves.</li>
+            </ul>
+          </li>
         </ul>
       </section>
 
       <section>
         <h3>⌨️ Hotkeys</h3>
-        <p><strong>Space:</strong> Pause/Resume • <strong>1 / 2 / 3:</strong> Game Speed (1x, 2x, 4x) • <strong>C:</strong> Recipe Codex</p>
+        <p><strong>Space:</strong> Pause/Resume • <strong>1 / 2 / 3:</strong> Game Speed (1x, 2x, 4x) • <strong>B:</strong> Marketplace Shop • <strong>C:</strong> Recipe Codex • <strong>ESC:</strong> Cancel Placement / Close Dialog</p>
       </section>
     </div>
   </dialog>

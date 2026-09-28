@@ -1,8 +1,8 @@
 // Gem TD - Main Game State Machine & Logic Controller
-import { CONFIG, QUALITIES, BASE_GEMS, WAVES } from './config.js';
+import { CONFIG, QUALITIES, BASE_GEMS, WAVES, TRAP_TYPES, RUNE_TYPES } from './config.js';
 import { SPECIAL_TOWERS, findMatchingRecipes, findDuplicateUpgrades, findCombinationsForTower } from './recipes.js';
 import { Pathfinding, TILE_TYPES } from './pathfinding.js';
-import { Creep, Tower, FloatingText, Particle } from './entities.js';
+import { Creep, Tower, Trap, FloatingText, Particle } from './entities.js';
 import { SOUND } from './audio.js';
 
 export const GAME_PHASES = {
@@ -28,6 +28,10 @@ export class Game {
     this.phase = GAME_PHASES.BUILDING;
     this.gameSpeed = 1; // 1x, 2x, 4x, 0 (paused)
     this.previousSpeed = 1;
+
+    // Traps and interaction mode
+    this.traps = [];
+    this.interactionMode = null; // null | { type: 'MOVE_TOWER', sourceTower } | { type: 'PLACE_TRAP', trapKey } | { type: 'SOCKET_RUNE', runeKey }
 
     // Grid state
     this.grid = Array.from({ length: CONFIG.GRID_HEIGHT }, () => Array(CONFIG.GRID_WIDTH).fill(TILE_TYPES.EMPTY));
@@ -451,6 +455,158 @@ export class Game {
   }
 
   /**
+   * Check if a trap can be placed at (x, y)
+   */
+  canPlaceTrapAt(x, y) {
+    if (!this.pathfinding.isInside(x, y)) return false;
+    if (this.pathfinding.isCheckpoint(x, y)) return false;
+    if (this.towerGrid[y][x] !== null) return false;
+    if (this.traps.some(t => t.tileX === x && t.tileY === y)) return false;
+    return true;
+  }
+
+  /**
+   * Buy and place a trap at (x, y)
+   */
+  placeTrap(trapKey, x, y) {
+    const def = TRAP_TYPES[trapKey];
+    if (!def) return false;
+    if (this.gold < def.cost) {
+      SOUND.playError();
+      return false;
+    }
+    if (!this.canPlaceTrapAt(x, y)) {
+      SOUND.playError();
+      return false;
+    }
+
+    this.gold -= def.cost;
+    const trap = new Trap(x, y, def);
+    this.traps.push(trap);
+    SOUND.playTrapPlace();
+    this.addFloatingText(trap.pixelX, trap.pixelY - 15, `${def.name}!`, def.color, 14, true);
+    return true;
+  }
+
+  /**
+   * Check if a tower can be moved
+   */
+  canMoveTower(tower) {
+    return !!(tower && !tower.isSlate);
+  }
+
+  /**
+   * Check if a tower can be moved to target (x, y)
+   */
+  canMoveTowerTo(tower, targetX, targetY) {
+    if (!this.canMoveTower(tower)) return false;
+    if (!this.pathfinding.isInside(targetX, targetY)) return false;
+    if (this.pathfinding.isCheckpoint(targetX, targetY)) return false;
+    if (tower.tileX === targetX && tower.tileY === targetY) return false;
+
+    const destTower = this.towerGrid[targetY][targetX];
+    // Swapping with an existing Rock Slate is always valid and 100% pathing safe!
+    if (destTower && destTower.isSlate) return true;
+
+    // Moving to an empty tile:
+    if (!destTower && this.grid[targetY][targetX] === TILE_TYPES.EMPTY) {
+      return this.pathfinding.canPlaceAt(this.grid, targetX, targetY);
+    }
+
+    return false;
+  }
+
+  /**
+   * Move or swap a tower to target (x, y)
+   */
+  moveTower(tower, targetX, targetY) {
+    if (!this.canMoveTowerTo(tower, targetX, targetY)) {
+      SOUND.playError();
+      return false;
+    }
+    if (this.gold < CONFIG.MOVE_TOWER_COST) {
+      SOUND.playError();
+      return false;
+    }
+
+    this.gold -= CONFIG.MOVE_TOWER_COST;
+    const oldX = tower.tileX;
+    const oldY = tower.tileY;
+    const destTower = this.towerGrid[targetY][targetX];
+
+    if (destTower && destTower.isSlate) {
+      // Swap positions
+      destTower.tileX = oldX;
+      destTower.tileY = oldY;
+      destTower.pixelX = oldX * CONFIG.DEFAULT_TILE_SIZE + CONFIG.DEFAULT_TILE_SIZE / 2;
+      destTower.pixelY = oldY * CONFIG.DEFAULT_TILE_SIZE + CONFIG.DEFAULT_TILE_SIZE / 2;
+      this.towerGrid[oldY][oldX] = destTower;
+
+      tower.tileX = targetX;
+      tower.tileY = targetY;
+      tower.pixelX = targetX * CONFIG.DEFAULT_TILE_SIZE + CONFIG.DEFAULT_TILE_SIZE / 2;
+      tower.pixelY = targetY * CONFIG.DEFAULT_TILE_SIZE + CONFIG.DEFAULT_TILE_SIZE / 2;
+      this.towerGrid[targetY][targetX] = tower;
+    } else {
+      // Empty tile: leave a slate at old position so the maze doesn't get punctured!
+      const newSlate = new Tower(oldX, oldY, { isSlate: true });
+      this.towerGrid[oldY][oldX] = newSlate;
+      this.grid[oldY][oldX] = TILE_TYPES.SLATE;
+
+      tower.tileX = targetX;
+      tower.tileY = targetY;
+      tower.pixelX = targetX * CONFIG.DEFAULT_TILE_SIZE + CONFIG.DEFAULT_TILE_SIZE / 2;
+      tower.pixelY = targetY * CONFIG.DEFAULT_TILE_SIZE + CONFIG.DEFAULT_TILE_SIZE / 2;
+      this.towerGrid[targetY][targetX] = tower;
+      this.grid[targetY][targetX] = TILE_TYPES.TOWER;
+    }
+
+    this.updateRoute();
+    SOUND.playTeleport();
+    this.addFloatingText(tower.pixelX, tower.pixelY - 20, 'Tower Relocated!', '#fbbf24', 16, true);
+    this.selectedTower = tower;
+    return true;
+  }
+
+  /**
+   * Socket a rune into an active tower
+   */
+  socketRuneToTower(tower, runeKey) {
+    if (!tower || tower.isSlate || !tower.canSocketRune()) {
+      SOUND.playError();
+      return false;
+    }
+    const def = RUNE_TYPES[runeKey];
+    if (!def) return false;
+    if (this.gold < def.cost) {
+      SOUND.playError();
+      return false;
+    }
+
+    this.gold -= def.cost;
+    tower.socketRune(runeKey);
+    SOUND.playRuneSocket();
+    this.addFloatingText(tower.pixelX, tower.pixelY - 20, `${def.name} Socketed!`, def.color, 16, true);
+    return true;
+  }
+
+  /**
+   * Heal the Gem Castle
+   */
+  healCastle() {
+    if (this.gold < CONFIG.HEAL_CASTLE_COST) {
+      SOUND.playError();
+      return false;
+    }
+    this.gold -= CONFIG.HEAL_CASTLE_COST;
+    this.lives += CONFIG.HEAL_CASTLE_AMOUNT;
+    SOUND.playHeal();
+    const cp = CONFIG.CHECKPOINTS[4];
+    this.addFloatingText(cp.x * CONFIG.DEFAULT_TILE_SIZE + 12, cp.y * CONFIG.DEFAULT_TILE_SIZE, `+${CONFIG.HEAL_CASTLE_AMOUNT} Lives!`, '#4ade80', 18, true);
+    return true;
+  }
+
+  /**
    * Start Wave
    */
   startWave() {
@@ -575,6 +731,28 @@ export class Game {
     for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
       if (!this.floatingTexts[i].update(dt)) {
         this.floatingTexts.splice(i, 1);
+      }
+    }
+
+    // Update traps
+    for (let i = this.traps.length - 1; i >= 0; i--) {
+      const trap = this.traps[i];
+      trap.update(dt);
+
+      if (this.phase === GAME_PHASES.WAVE && trap.canTrigger()) {
+        for (const creep of this.creeps) {
+          if (creep.hp > 0 && !creep.isFlying) {
+            const d = Math.hypot(creep.x - trap.pixelX, creep.y - trap.pixelY);
+            if (d <= trap.triggerRadius) {
+              trap.trigger(creep, this);
+              break;
+            }
+          }
+        }
+      }
+
+      if (trap.isDead) {
+        this.traps.splice(i, 1);
       }
     }
 
