@@ -641,6 +641,13 @@ export class UIController {
     const dock = this.elBottomDock;
     if (!dock) return;
 
+    const waveData = this.game.getWaveData();
+    const waveSpecialInfo = [];
+    if (waveData.isBoss) waveSpecialInfo.push('Boss');
+    if (waveData.isFlying) waveSpecialInfo.push('Flying');
+    if (waveData.trait && waveData.trait.trim()) waveSpecialInfo.push(waveData.trait);
+    const specialText = waveSpecialInfo.length ? waveSpecialInfo.join(' • ') : 'Normal';
+
     if (this.game.phase === GAME_PHASES.BUILDING) {
       const placed = this.game.placedGemsThisTurn.length;
       const nextChance = CONFIG.CHANCE_UPGRADES[this.game.chanceLevel];
@@ -649,8 +656,13 @@ export class UIController {
       dock.innerHTML = `
         <div class="dock-row">
           <div class="dock-info">
-            <span class="dock-title">Gems Placed This Round: ${placed} / 5</span>
-            <span class="dock-desc">Click empty tiles to place gems and build your maze!</span>
+            <span class="dock-title">Wave ${this.game.currentWave}: ${waveData.name}</span>
+            <div class="wave-stat-strip">
+              <span>❤️ HP: ${waveData.hp}</span>
+              <span>👥 Amount: ${waveData.count}</span>
+              <span>✨ Special: ${specialText}</span>
+            </div>
+            <span class="dock-desc">Gems placed this round: ${placed} / 5 • Click empty tiles to place gems and build your maze!</span>
           </div>
           <div class="dock-actions">
             <button type="button" id="btn-upgrade-chance" class="game-btn primary" ${maxChance || this.game.gold < (nextChance ? nextChance.cost : 999) ? 'disabled' : ''}>
@@ -740,7 +752,12 @@ export class UIController {
       dock.innerHTML = `
         <div class="dock-row wave-status">
           <div class="dock-info">
-            <span class="dock-title">Wave in Progress...</span>
+            <span class="dock-title">Wave ${this.game.currentWave}: ${waveData.name}</span>
+            <div class="wave-stat-strip">
+              <span>❤️ HP: ${waveData.hp}</span>
+              <span>👥 Amount: ${waveData.count}</span>
+              <span>✨ Special: ${specialText}</span>
+            </div>
             <span class="dock-desc">Towers are defending the castle against the invaders!</span>
           </div>
         </div>

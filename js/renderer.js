@@ -13,6 +13,51 @@ const DAMAGE_TYPE_VISUALS = {
   crit:     { color: '#fbbf24', icon: '💥', trailColor: '#fde047', impactColor: '#f59e0b' },
 };
 
+function hexToRgb(hex) {
+  const normalized = hex.replace('#', '');
+  const value = normalized.length === 3
+    ? normalized.split('').map(ch => ch + ch).join('')
+    : normalized;
+  const num = Number.parseInt(value, 16);
+  return {
+    r: (num >> 16) & 255,
+    g: (num >> 8) & 255,
+    b: num & 255,
+  };
+}
+
+function rgbToHex(r, g, b) {
+  const toHex = (n) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function adjustColor(hex, amount) {
+  const { r, g, b } = hexToRgb(hex);
+  const brighten = (channel) => Math.round(channel + (255 - channel) * amount);
+  const darken = (channel) => Math.round(channel * (1 + amount));
+  const rr = amount >= 0 ? brighten(r) : darken(r);
+  const gg = amount >= 0 ? brighten(g) : darken(g);
+  const bb = amount >= 0 ? brighten(b) : darken(b);
+  return rgbToHex(rr, gg, bb);
+}
+
+function withAlpha(hex, alpha) {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+const TOWER_FAMILY_STYLES = {
+  B: { name: 'frost', shape: 'crystal', accent: 'spike' },
+  D: { name: 'pierce', shape: 'diamond', accent: 'blade' },
+  Y: { name: 'lightning', shape: 'kite', accent: 'spark' },
+  E: { name: 'poison', shape: 'droplet', accent: 'bubble' },
+  G: { name: 'haste', shape: 'lattice', accent: 'orbital' },
+  Q: { name: 'water', shape: 'orb', accent: 'wave' },
+  R: { name: 'fire', shape: 'pyramid', accent: 'flame' },
+  P: { name: 'arcane', shape: 'sigil', accent: 'rune' },
+  default: { name: 'gem', shape: 'hex', accent: 'facet' }
+};
+
 export class GameRenderer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -278,24 +323,33 @@ export class GameRenderer {
 
   drawSlate(ctx, px, py, ts) {
     ctx.save();
-    // Granite rock wall with 3D beveling
-    ctx.fillStyle = '#334155';
+    const rockGrad = ctx.createLinearGradient(px, py, px + ts, py + ts);
+    rockGrad.addColorStop(0, '#3b475a');
+    rockGrad.addColorStop(0.5, '#334155');
+    rockGrad.addColorStop(1, '#1f2937');
+    ctx.fillStyle = rockGrad;
     ctx.fillRect(px + 1, py + 1, ts - 2, ts - 2);
 
-    // Bevel highlights
-    ctx.fillStyle = '#475569';
+    ctx.fillStyle = '#5b6c7d';
     ctx.fillRect(px + 2, py + 2, ts - 4, 3);
     ctx.fillRect(px + 2, py + 2, 3, ts - 4);
 
-    // Bevel shadow
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(px + 2, py + ts - 5, ts - 4, 3);
     ctx.fillRect(px + ts - 5, py + 2, 3, ts - 4);
 
-    // Center rune carving
-    ctx.strokeStyle = '#64748b';
+    ctx.strokeStyle = '#7c8ea2';
     ctx.lineWidth = 1;
     ctx.strokeRect(px + 5, py + 5, ts - 10, ts - 10);
+
+    ctx.strokeStyle = withAlpha('#94a3b8', 0.45);
+    for (let i = 0; i < 3; i++) {
+      const y = py + 8 + i * 9;
+      ctx.beginPath();
+      ctx.moveTo(px + 7, y);
+      ctx.lineTo(px + ts - 7, y + 3);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -303,8 +357,11 @@ export class GameRenderer {
     ctx.save();
 
     const rad = (ts / 2) * 0.78;
+    const style = TOWER_FAMILY_STYLES[tower.code] || TOWER_FAMILY_STYLES.default;
+    const sides = tower.isSpecial ? 8 : (style.shape === 'orb' ? 10 : 6);
+    const darkColor = adjustColor(tower.gemColor, -0.35);
+    const lightColor = adjustColor(tower.gemColor, 0.35);
 
-    // Pulsing selection ring for newly placed unconfirmed gems
     if (isTemp) {
       const pulse = Math.sin(this.time * 6) * 3;
       ctx.strokeStyle = '#facc15';
@@ -314,7 +371,6 @@ export class GameRenderer {
       ctx.stroke();
     }
 
-    // Animated combine marker when all recipe/duplicate ingredients are ready on board
     if (isCombinable) {
       const pulse = Math.sin(this.time * 5) * 2;
       ctx.save();
@@ -325,8 +381,6 @@ export class GameRenderer {
       ctx.beginPath();
       ctx.arc(cx, cy, rad + 5 + pulse, 0, Math.PI * 2);
       ctx.stroke();
-
-      // Sparkle indicator icon
       ctx.fillStyle = '#fde047';
       ctx.font = 'bold 11px sans-serif';
       ctx.textAlign = 'center';
@@ -335,10 +389,9 @@ export class GameRenderer {
       ctx.restore();
     }
 
-    // Glow aura for higher quality / special towers
     if (tower.glowColor) {
       const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, rad * 1.8);
-      grad.addColorStop(0, tower.glowColor + '99');
+      grad.addColorStop(0, withAlpha(tower.glowColor, 0.6));
       grad.addColorStop(1, 'transparent');
       ctx.fillStyle = grad;
       ctx.beginPath();
@@ -346,7 +399,6 @@ export class GameRenderer {
       ctx.fill();
     }
 
-    // Quality Tier Ring (Chipped, Flawed, Regular, Flawless, Perfect)
     if (!tower.isSpecial && tower.level) {
       const q = QUALITIES[tower.level];
       if (q) {
@@ -357,7 +409,6 @@ export class GameRenderer {
         ctx.stroke();
       }
     } else if (tower.isSpecial) {
-      // Golden ornate ring for special towers
       ctx.strokeStyle = '#fbbf24';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
@@ -365,46 +416,128 @@ export class GameRenderer {
       ctx.stroke();
     }
 
-    // Gem Faceted Body (Octagon / Diamond)
-    ctx.fillStyle = tower.gemColor;
+    const bodyGrad = ctx.createRadialGradient(cx - rad * 0.45, cy - rad * 0.5, rad * 0.18, cx, cy, rad * 1.1);
+    bodyGrad.addColorStop(0, lightColor);
+    bodyGrad.addColorStop(0.5, tower.gemColor);
+    bodyGrad.addColorStop(1, darkColor);
+
+    ctx.fillStyle = bodyGrad;
     ctx.beginPath();
-    const sides = tower.isSpecial ? 8 : 6;
-    for (let i = 0; i < sides; i++) {
-      const angle = (i * 2 * Math.PI) / sides - Math.PI / 2;
-      const x = cx + rad * Math.cos(angle);
-      const y = cy + rad * Math.sin(angle);
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+
+    if (style.shape === 'diamond') {
+      ctx.moveTo(cx, cy - rad);
+      ctx.lineTo(cx + rad, cy);
+      ctx.lineTo(cx, cy + rad);
+      ctx.lineTo(cx - rad, cy);
+      ctx.closePath();
+    } else if (style.shape === 'kite') {
+      ctx.moveTo(cx, cy - rad * 1.2);
+      ctx.lineTo(cx + rad * 0.95, cy - rad * 0.15);
+      ctx.lineTo(cx + rad * 0.4, cy + rad);
+      ctx.lineTo(cx - rad * 0.4, cy + rad);
+      ctx.lineTo(cx - rad * 0.95, cy - rad * 0.15);
+      ctx.closePath();
+    } else if (style.shape === 'droplet') {
+      ctx.moveTo(cx, cy - rad * 1.15);
+      ctx.bezierCurveTo(cx + rad, cy - rad * 0.25, cx + rad * 0.9, cy + rad * 0.9, cx, cy + rad * 1.15);
+      ctx.bezierCurveTo(cx - rad * 0.9, cy + rad * 0.9, cx - rad, cy - rad * 0.25, cx, cy - rad * 1.15);
+      ctx.closePath();
+    } else if (style.shape === 'lattice') {
+      ctx.moveTo(cx, cy - rad * 1.1);
+      ctx.lineTo(cx + rad * 1.1, cy);
+      ctx.lineTo(cx, cy + rad * 1.1);
+      ctx.lineTo(cx - rad * 1.1, cy);
+      ctx.closePath();
+      ctx.moveTo(cx - rad * 0.8, cy - rad * 0.25);
+      ctx.lineTo(cx + rad * 0.8, cy - rad * 0.25);
+      ctx.lineTo(cx + rad * 0.8, cy + rad * 0.25);
+      ctx.lineTo(cx - rad * 0.8, cy + rad * 0.25);
+      ctx.closePath();
+    } else if (style.shape === 'orb') {
+      ctx.arc(cx, cy, rad * 0.92, 0, Math.PI * 2);
+    } else if (style.shape === 'pyramid') {
+      ctx.moveTo(cx, cy - rad * 1.1);
+      ctx.lineTo(cx + rad, cy + rad * 0.9);
+      ctx.lineTo(cx - rad, cy + rad * 0.9);
+      ctx.closePath();
+    } else if (style.shape === 'sigil') {
+      for (let i = 0; i < sides; i++) {
+        const angle = (i * 2 * Math.PI) / sides - Math.PI / 2;
+        const x = cx + rad * Math.cos(angle);
+        const y = cy + rad * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+    } else {
+      for (let i = 0; i < sides; i++) {
+        const angle = (i * 2 * Math.PI) / sides - Math.PI / 2;
+        const x = cx + rad * Math.cos(angle);
+        const y = cy + rad * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
     }
-    ctx.closePath();
     ctx.fill();
 
-    // Darker outline
     ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Specular Highlight
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+    ctx.strokeStyle = withAlpha('#ffffff', 0.35);
+    ctx.lineWidth = 1;
+    if (style.shape === 'diamond' || style.shape === 'sigil' || style.shape === 'hex') {
+      for (let i = 0; i < sides; i++) {
+        const angle = (i * 2 * Math.PI) / sides - Math.PI / 2;
+        const startX = cx + rad * 0.2 * Math.cos(angle);
+        const startY = cy + rad * 0.2 * Math.sin(angle);
+        const endX = cx + rad * 0.9 * Math.cos(angle + 0.2);
+        const endY = cy + rad * 0.9 * Math.sin(angle + 0.2);
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+      }
+    } else if (style.shape === 'drop' || style.shape === 'droplet') {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - rad * 0.2);
+      ctx.lineTo(cx + rad * 0.7, cy + rad * 0.8);
+      ctx.lineTo(cx - rad * 0.7, cy + rad * 0.8);
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = withAlpha(tower.accentColor, 0.72);
+    if (style.shape === 'orb') {
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (style.shape === 'pyramid') {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - rad * 0.3);
+      ctx.lineTo(cx + rad * 0.4, cy + rad * 0.6);
+      ctx.lineTo(cx - rad * 0.4, cy + rad * 0.6);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = withAlpha('#ffffff', 0.9);
     ctx.beginPath();
-    ctx.arc(cx - rad * 0.35, cy - rad * 0.35, rad * 0.28, 0, Math.PI * 2);
+    ctx.arc(cx - rad * 0.35, cy - rad * 0.35, rad * 0.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Accent facet
-    ctx.fillStyle = tower.accentColor;
-    ctx.beginPath();
-    ctx.arc(cx, cy, rad * 0.35, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Short symbol in center
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
     ctx.font = 'bold 9px sans-serif';
-    ctx.fillStyle = '#0f172a';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const symbol = tower.isSpecial ? tower.name.slice(0, 2).toUpperCase() : (tower.code && tower.level ? `${tower.code}${tower.level}` : '');
     ctx.fillText(symbol, cx, cy);
 
-    // Orbiting socketed runes
     if (tower.runes && tower.runes.length > 0) {
       const runeCount = tower.runes.length;
       for (let i = 0; i < runeCount; i++) {
@@ -421,7 +554,6 @@ export class GameRenderer {
         ctx.beginPath();
         ctx.arc(rx, ry, 3.2, 0, Math.PI * 2);
         ctx.fill();
-
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;
         ctx.stroke();
@@ -429,10 +561,8 @@ export class GameRenderer {
       }
     }
 
-    // Tower MVP Crown & Level Badge
     if (tower.mvpLevel && tower.mvpLevel > 0) {
       ctx.save();
-      // Radiant golden aura if max MVP rank (10)
       if (tower.mvpLevel >= CONFIG.MVP_MAX_LEVEL) {
         const auraPulse = Math.sin(this.time * 4) * 2;
         ctx.strokeStyle = '#fbbf24';
@@ -934,23 +1064,133 @@ export class GameRenderer {
         ctx.restore();
       }
 
-      // Creep Body
-      let color = creep.isBoss ? '#ef4444' : creep.isFlying ? '#38bdf8' : '#e2e8f0';
-      // Tint body slightly for active debuffs (subtle overlay)
-      if (creep.debuffs.stun) color = '#fde047';
-      else if (creep.debuffs.burn) color = '#fdba74';
-      else if (creep.debuffs.poison) color = '#86efac';
-      else if (creep.debuffs.slow) color = '#93c5fd';
+      let baseColor = creep.isBoss ? '#ef4444' : creep.isFlying ? '#38bdf8' : '#e2e8f0';
+      if (creep.debuffs.stun) baseColor = '#fde047';
+      else if (creep.debuffs.burn) baseColor = '#fdba74';
+      else if (creep.debuffs.poison) baseColor = '#86efac';
+      else if (creep.debuffs.slow) baseColor = '#93c5fd';
 
-      ctx.fillStyle = color;
+      const bodyGrad = ctx.createRadialGradient(cx - creep.radius * 0.45, cy - creep.radius * 0.5, 2, cx, cy, creep.radius * 1.5);
+      bodyGrad.addColorStop(0, adjustColor(baseColor, 0.42));
+      bodyGrad.addColorStop(0.55, baseColor);
+      bodyGrad.addColorStop(1, adjustColor(baseColor, -0.4));
+
+      ctx.fillStyle = bodyGrad;
       ctx.beginPath();
-      ctx.arc(cx, cy, creep.radius, 0, Math.PI * 2);
+
+      const monsterStyle = creep.isBoss
+        ? 'boss'
+        : creep.isFlying
+          ? 'winged'
+          : creep.trait && creep.trait.includes('Recharge')
+            ? 'shark'
+            : creep.trait && creep.trait.includes('Physical Immune')
+              ? 'crab'
+              : creep.trait && creep.trait.includes('Magic Immune')
+                ? 'spider'
+                : creep.trait && creep.trait.includes('Evasion')
+                  ? 'sneak'
+                  : creep.hasVitality
+                    ? 'slug'
+                    : 'walker';
+
+      if (monsterStyle === 'winged') {
+        ctx.ellipse(cx, cy, creep.radius * 1.05, creep.radius * 0.82, 0, 0, Math.PI * 2);
+      } else if (monsterStyle === 'boss') {
+        ctx.moveTo(cx, cy - creep.radius * 1.2);
+        ctx.lineTo(cx + creep.radius * 1.1, cy - creep.radius * 0.2);
+        ctx.lineTo(cx + creep.radius * 1.2, cy + creep.radius * 0.75);
+        ctx.lineTo(cx + creep.radius * 0.6, cy + creep.radius * 1.15);
+        ctx.lineTo(cx - creep.radius * 0.6, cy + creep.radius * 1.15);
+        ctx.lineTo(cx - creep.radius * 1.2, cy + creep.radius * 0.75);
+        ctx.lineTo(cx - creep.radius * 1.1, cy - creep.radius * 0.2);
+        ctx.closePath();
+      } else if (monsterStyle === 'shark') {
+        ctx.moveTo(cx - creep.radius, cy);
+        ctx.lineTo(cx - creep.radius * 0.15, cy - creep.radius * 0.9);
+        ctx.lineTo(cx + creep.radius * 0.85, cy - creep.radius * 0.3);
+        ctx.lineTo(cx + creep.radius * 1.15, cy + creep.radius * 0.1);
+        ctx.lineTo(cx + creep.radius * 0.85, cy + creep.radius * 0.7);
+        ctx.lineTo(cx - creep.radius * 0.15, cy + creep.radius * 0.9);
+        ctx.closePath();
+      } else if (monsterStyle === 'crab') {
+        ctx.ellipse(cx, cy, creep.radius * 1.05, creep.radius * 0.8, 0, 0, Math.PI * 2);
+        ctx.moveTo(cx - creep.radius * 1.2, cy - creep.radius * 0.2);
+        ctx.lineTo(cx - creep.radius * 1.8, cy - creep.radius * 0.7);
+        ctx.moveTo(cx + creep.radius * 1.2, cy - creep.radius * 0.2);
+        ctx.lineTo(cx + creep.radius * 1.8, cy - creep.radius * 0.7);
+      } else if (monsterStyle === 'spider') {
+        ctx.ellipse(cx, cy, creep.radius * 0.92, creep.radius * 0.7, 0, 0, Math.PI * 2);
+        ctx.moveTo(cx - creep.radius * 0.7, cy - creep.radius * 0.2);
+        ctx.lineTo(cx - creep.radius * 1.5, cy - creep.radius * 0.9);
+        ctx.moveTo(cx + creep.radius * 0.7, cy - creep.radius * 0.2);
+        ctx.lineTo(cx + creep.radius * 1.5, cy - creep.radius * 0.9);
+        ctx.moveTo(cx - creep.radius * 0.7, cy + creep.radius * 0.2);
+        ctx.lineTo(cx - creep.radius * 1.5, cy + creep.radius * 0.9);
+        ctx.moveTo(cx + creep.radius * 0.7, cy + creep.radius * 0.2);
+        ctx.lineTo(cx + creep.radius * 1.5, cy + creep.radius * 0.9);
+      } else if (monsterStyle === 'sneak') {
+        ctx.moveTo(cx - creep.radius, cy);
+        ctx.lineTo(cx - creep.radius * 0.35, cy - creep.radius * 0.9);
+        ctx.lineTo(cx + creep.radius * 0.65, cy - creep.radius * 0.45);
+        ctx.lineTo(cx + creep.radius, cy + creep.radius * 0.2);
+        ctx.lineTo(cx + creep.radius * 0.35, cy + creep.radius * 0.9);
+        ctx.lineTo(cx - creep.radius * 0.65, cy + creep.radius * 0.7);
+        ctx.closePath();
+      } else if (monsterStyle === 'slug') {
+        ctx.ellipse(cx, cy, creep.radius * 1.1, creep.radius * 0.72, 0, 0, Math.PI * 2);
+        ctx.moveTo(cx - creep.radius * 0.5, cy + creep.radius * 0.15);
+        ctx.lineTo(cx - creep.radius * 1.3, cy + creep.radius * 0.9);
+      } else {
+        ctx.ellipse(cx, cy, creep.radius * 0.9, creep.radius * 0.85, 0, 0, Math.PI * 2);
+      }
       ctx.fill();
       ctx.strokeStyle = '#0f172a';
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Wing animation for flying creeps
+      ctx.fillStyle = withAlpha('#0f172a', 0.18);
+      const plateCount = monsterStyle === 'boss' ? 5 : 4;
+      for (let plate = 0; plate < plateCount; plate++) {
+        const angle = (plate / plateCount) * Math.PI * 2 + this.time * 0.4;
+        const plateRadius = creep.radius * (monsterStyle === 'boss' ? 0.48 : 0.42);
+        const px = cx + Math.cos(angle) * plateRadius;
+        const py = cy + Math.sin(angle) * plateRadius * 0.9;
+        ctx.beginPath();
+        ctx.ellipse(px, py, creep.radius * 0.25, creep.radius * 0.16, angle, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.strokeStyle = withAlpha('#ffffff', 0.3);
+      ctx.lineWidth = 1;
+      for (let ridge = 0; ridge < 5; ridge++) {
+        const angle = ridge * 0.9 + 0.4;
+        const inner = creep.radius * 0.22;
+        const outer = creep.radius * 0.95;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(angle) * inner, cy + Math.sin(angle) * inner);
+        ctx.lineTo(cx + Math.cos(angle + 0.23) * outer, cy + Math.sin(angle + 0.23) * outer);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.ellipse(cx - creep.radius * 0.28, cy - creep.radius * 0.2, 3.5, 5, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + creep.radius * 0.28, cy - creep.radius * 0.2, 3.5, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.arc(cx - creep.radius * 0.29, cy - creep.radius * 0.2, 1.5, 0, Math.PI * 2);
+      ctx.arc(cx + creep.radius * 0.29, cy - creep.radius * 0.2, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = withAlpha('#f8fafc', 0.8);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy + creep.radius * 0.08, creep.radius * 0.38, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+
       if (creep.isFlying) {
         const wingFlap = Math.sin(this.time * 12) * 6;
         ctx.fillStyle = '#bae6fd';
@@ -960,7 +1200,6 @@ export class GameRenderer {
         ctx.fill();
       }
 
-      // Boss Crown
       if (creep.isBoss) {
         ctx.fillStyle = '#fbbf24';
         ctx.beginPath();
@@ -973,6 +1212,13 @@ export class GameRenderer {
         ctx.lineTo(cx + 8, cy - creep.radius - 2);
         ctx.closePath();
         ctx.fill();
+
+        ctx.strokeStyle = '#fef3c7';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 5, cy + creep.radius * 0.2);
+        ctx.lineTo(cx + 5, cy + creep.radius * 0.2);
+        ctx.stroke();
       }
 
       // Immunity badges
