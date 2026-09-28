@@ -196,16 +196,18 @@ export const BASE_GEMS = {
     name: 'Sapphire',
     gemColor: '#2563eb',
     accentColor: '#93c5fd',
-    damageType: 'magic', // Cold magic damage
+    damageType: 'magic',
     element: 'frost',
     attackStyle: 'Glacial Slow',
     description: 'Chills targets with sub-zero frost, reducing movement speed.',
+    role: 'Control',
+    roleHint: 'Best for slowing, stalling, and controlling long lanes.',
     baseDamage: [0, 8, 20, 50, 120, 300],
-    attackSpeed: [0, 1.0, 1.0, 1.0, 1.0, 1.0], // attacks per second
+    attackSpeed: [0, 1.0, 1.0, 1.0, 1.0, 1.0],
     range: [0, 140, 150, 160, 175, 190],
     effect: 'slow',
-    effectValue: [0, 0.20, 0.30, 0.40, 0.50, 0.60], // slow percentage
-    effectDuration: [0, 3.0, 3.5, 4.0, 4.5, 5.0] // seconds
+    effectValue: [0, 0.20, 0.30, 0.40, 0.50, 0.60],
+    effectDuration: [0, 3.0, 3.5, 4.0, 4.5, 5.0]
   },
   'D': {
     code: 'D',
@@ -216,6 +218,8 @@ export const BASE_GEMS = {
     element: 'pierce',
     attackStyle: 'Piercing Strike',
     description: 'High physical single-target piercing damage that never misses.',
+    role: 'Burst',
+    roleHint: 'Best for clean single-target damage and boss pressure.',
     baseDamage: [0, 20, 50, 130, 320, 800],
     attackSpeed: [0, 1.1, 1.1, 1.2, 1.25, 1.3],
     range: [0, 150, 160, 175, 190, 210],
@@ -230,26 +234,30 @@ export const BASE_GEMS = {
     element: 'lightning',
     attackStyle: 'Multi-Target Volley',
     description: 'Multi-shot arrows hitting multiple targets simultaneously.',
+    role: 'Area',
+    roleHint: 'Best for clearing swarms and softening grouped enemies.',
     baseDamage: [0, 8, 20, 50, 120, 300],
     attackSpeed: [0, 1.0, 1.0, 1.0, 1.0, 1.0],
     range: [0, 140, 150, 160, 175, 190],
     effect: 'multishot',
-    effectValue: [0, 2, 3, 4, 5, 6] // targets
+    effectValue: [0, 2, 3, 4, 5, 6]
   },
   'E': {
     code: 'E',
     name: 'Emerald',
     gemColor: '#16a34a',
     accentColor: '#86efac',
-    damageType: 'magic', // Poison magic damage
+    damageType: 'magic',
     element: 'poison',
     attackStyle: 'Deadly Venom',
     description: 'Inflicts deadly poison that deals continuous damage over time.',
+    role: 'DoT',
+    roleHint: 'Best for attrition and grinding down tanky waves.',
     baseDamage: [0, 8, 20, 50, 120, 300],
     attackSpeed: [0, 1.0, 1.0, 1.0, 1.0, 1.0],
     range: [0, 140, 150, 160, 175, 190],
     effect: 'poison',
-    effectValue: [0, 6, 16, 45, 110, 280], // damage per sec
+    effectValue: [0, 6, 16, 45, 110, 280],
     effectDuration: [0, 4.0, 4.0, 4.0, 4.5, 5.0]
   },
   'G': {
@@ -261,11 +269,13 @@ export const BASE_GEMS = {
     element: 'haste',
     attackStyle: 'Haste Aura',
     description: 'Emits an attack speed aura buffing all nearby allied towers.',
+    role: 'Support',
+    roleHint: 'Best for supporting a whole cluster of towers.',
     baseDamage: [0, 10, 25, 65, 160, 400],
     attackSpeed: [0, 1.0, 1.0, 1.0, 1.0, 1.0],
     range: [0, 130, 140, 150, 165, 180],
     effect: 'aura_speed',
-    effectValue: [0, 0.15, 0.25, 0.35, 0.50, 0.70], // +% attack speed
+    effectValue: [0, 0.15, 0.25, 0.35, 0.50, 0.70],
     effectRadius: [0, 110, 120, 135, 150, 170]
   },
   'Q': {
@@ -277,42 +287,48 @@ export const BASE_GEMS = {
     element: 'water',
     attackStyle: 'Anti-Air Hydro',
     description: 'Rapid-fire hydro bolts with massive bonus damage against flying units.',
+    role: 'Anti-Air',
+    roleHint: 'Best against flying swarms and aerial bosses.',
     baseDamage: [0, 7, 18, 45, 110, 270],
-    attackSpeed: [0, 2.0, 2.2, 2.4, 2.7, 3.0], // very fast attack speed
+    attackSpeed: [0, 2.0, 2.2, 2.4, 2.7, 3.0],
     range: [0, 130, 140, 150, 165, 180],
     effect: 'anti_air',
-    effectValue: [0, 1.5, 1.75, 2.0, 2.5, 3.0] // damage multiplier vs flying
+    effectValue: [0, 1.5, 1.75, 2.0, 2.5, 3.0]
   },
   'R': {
     code: 'R',
     name: 'Ruby',
     gemColor: '#dc2626',
     accentColor: '#fca5a5',
-    damageType: 'magic', // Fire magic damage
+    damageType: 'magic',
     element: 'fire',
     attackStyle: 'Fireball Splash',
     description: 'Explosive fiery missiles that deal area of effect (AoE) splash damage.',
+    role: 'Splash',
+    roleHint: 'Best for clustered enemies and breaking packs quickly.',
     baseDamage: [0, 10, 25, 65, 160, 400],
     attackSpeed: [0, 0.9, 0.9, 0.95, 1.0, 1.05],
     range: [0, 130, 140, 150, 165, 180],
     effect: 'splash',
     effectRadius: [0, 45, 50, 60, 70, 85],
-    effectValue: [0, 0.5, 0.5, 0.5, 0.5, 0.5] // % splash damage
+    effectValue: [0, 0.5, 0.5, 0.5, 0.5, 0.5]
   },
   'P': {
     code: 'P',
     name: 'Amethyst',
     gemColor: '#9333ea',
     accentColor: '#d8b4fe',
-    damageType: 'magic', // Arcane magic damage (armor sunder is a magic debuff)
+    damageType: 'magic',
     element: 'arcane',
     attackStyle: 'Armor Sunder',
     description: 'Shatters enemy armor, causing them to take increased damage from all towers.',
+    role: 'Debuff',
+    roleHint: 'Best for armor shredding and enabling glassier towers.',
     baseDamage: [0, 8, 20, 50, 120, 300],
     attackSpeed: [0, 1.0, 1.0, 1.0, 1.0, 1.0],
     range: [0, 140, 150, 160, 175, 190],
     effect: 'armor_shred',
-    effectValue: [0, 2, 4, 7, 11, 16], // armor reduction
+    effectValue: [0, 2, 4, 7, 11, 16],
     effectDuration: [0, 4.0, 4.0, 4.0, 4.5, 5.0]
   }
 };

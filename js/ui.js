@@ -585,6 +585,22 @@ export class UIController {
     }
   }
 
+  getWaveThreatSummary(waveData) {
+    const threatTags = [];
+    if (waveData.isBoss) threatTags.push('Boss');
+    if (waveData.isFlying) threatTags.push('Flying');
+    if (waveData.trait && waveData.trait.trim()) threatTags.push(waveData.trait);
+    return threatTags.length ? threatTags.join(' • ') : 'Standard';
+  }
+
+  getRecommendedTowerRole(waveData) {
+    if (waveData.isFlying) return 'Anti-Air';
+    if (waveData.trait && /magic immune|physical immune/i.test(waveData.trait)) return 'Burst + Debuff';
+    if (waveData.isBoss) return 'Burst + Control';
+    if (waveData.trait && /evasion|armored|reactive/i.test(waveData.trait)) return 'Burst + Support';
+    return 'Balanced';
+  }
+
   updateHUD() {
     const wave = this.game.currentWave;
     if (this._lastHudWave !== wave) {
@@ -642,11 +658,8 @@ export class UIController {
     if (!dock) return;
 
     const waveData = this.game.getWaveData();
-    const waveSpecialInfo = [];
-    if (waveData.isBoss) waveSpecialInfo.push('Boss');
-    if (waveData.isFlying) waveSpecialInfo.push('Flying');
-    if (waveData.trait && waveData.trait.trim()) waveSpecialInfo.push(waveData.trait);
-    const specialText = waveSpecialInfo.length ? waveSpecialInfo.join(' • ') : 'Normal';
+    const specialText = this.getWaveThreatSummary(waveData);
+    const recommendedRole = this.getRecommendedTowerRole(waveData);
 
     if (this.game.phase === GAME_PHASES.BUILDING) {
       const placed = this.game.placedGemsThisTurn.length;
@@ -660,7 +673,8 @@ export class UIController {
             <div class="wave-stat-strip">
               <span>❤️ HP: ${waveData.hp}</span>
               <span>👥 Amount: ${waveData.count}</span>
-              <span>✨ Special: ${specialText}</span>
+              <span>✨ Threat: ${specialText}</span>
+              <span>🎯 Counter: ${recommendedRole}</span>
             </div>
             <span class="dock-desc">Gems placed this round: ${placed} / 5 • Click empty tiles to place gems and build your maze!</span>
           </div>
@@ -756,7 +770,8 @@ export class UIController {
             <div class="wave-stat-strip">
               <span>❤️ HP: ${waveData.hp}</span>
               <span>👥 Amount: ${waveData.count}</span>
-              <span>✨ Special: ${specialText}</span>
+              <span>✨ Threat: ${specialText}</span>
+              <span>🎯 Counter: ${recommendedRole}</span>
             </div>
             <span class="dock-desc">Towers are defending the castle against the invaders!</span>
           </div>
@@ -802,12 +817,13 @@ export class UIController {
     const q = QUALITIES[t.level];
     const tierBadge = t.isSpecial ? `<span class="badge special">${t.tier}</span>` : `<span class="badge tier" style="background: ${q ? q.border : '#334155'}">${q ? q.namePrefix : ''}</span>`;
     const isTempGem = this.game.placedGemsThisTurn.includes(t);
-    const isUnconfirmedGem = this.game.phase === GAME_PHASES.CHOOSING && isTempGem;
+    const canFinalizeRound = this.game.phase === GAME_PHASES.CHOOSING && this.game.placedGemsThisTurn.length >= CONFIG.GEMS_PER_ROUND;
+    const isUnconfirmedGem = canFinalizeRound && isTempGem;
     const unconfirmedIdx = isUnconfirmedGem ? this.game.placedGemsThisTurn.indexOf(t) : -1;
 
     const combinations = this.game.getCombinationsForTower(t);
     let combinationsHtml = '';
-    if (combinations.length > 0) {
+    if (canFinalizeRound && combinations.length > 0) {
       combinationsHtml = `
         <div class="combine-ready-section">
           <div class="combine-ready-header">
@@ -844,6 +860,18 @@ export class UIController {
                 `;
               }
             }).join('')}
+          </div>
+        </div>
+      `;
+    } else if (!canFinalizeRound && this.game.phase === GAME_PHASES.BUILDING) {
+      combinationsHtml = `
+        <div class="combine-ready-section">
+          <div class="combine-ready-header">
+            <span class="combine-badge-icon">⏳</span>
+            <div class="combine-ready-text">
+              <span class="combine-ready-title">Finish this round</span>
+              <span class="combine-ready-hint">Place all ${CONFIG.GEMS_PER_ROUND} towers before keeping or combining.</span>
+            </div>
           </div>
         </div>
       `;
@@ -985,7 +1013,13 @@ export class UIController {
             ✓ Keep as Active Tower
           </button>
         </div>
-      ` : ''}
+      ` : (this.game.phase === GAME_PHASES.BUILDING ? `
+        <div class="actions" style="margin-top: 8px;">
+          <button type="button" class="game-btn primary" disabled style="width: 100%; padding: 8px;">
+            Place all ${CONFIG.GEMS_PER_ROUND} towers to choose a keeper
+          </button>
+        </div>
+      ` : '')}
     `;
   }
 

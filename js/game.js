@@ -196,6 +196,7 @@ export class Game {
    */
   keepGem(chosenTower) {
     if (this.phase !== GAME_PHASES.CHOOSING) return false;
+    if (this.placedGemsThisTurn.length < CONFIG.GEMS_PER_ROUND) return false;
     if (!this.placedGemsThisTurn.includes(chosenTower)) return false;
 
     // Turn all unchosen newly placed gems into slates
@@ -249,6 +250,11 @@ export class Game {
    * Craft a special tower recipe
    */
   craftSpecialTower(recipeName, targetTileX, targetTileY) {
+    if (this.phase !== GAME_PHASES.CHOOSING || this.placedGemsThisTurn.length < CONFIG.GEMS_PER_ROUND) {
+      SOUND.playError();
+      return false;
+    }
+
     const def = SPECIAL_TOWERS[recipeName];
     if (!def) return false;
 
@@ -321,6 +327,11 @@ export class Game {
    * Apply duplicate upgrade (pair or quad)
    */
   applyDuplicateUpgrade(upgrade) {
+    if (this.phase !== GAME_PHASES.CHOOSING || this.placedGemsThisTurn.length < CONFIG.GEMS_PER_ROUND) {
+      SOUND.playError();
+      return false;
+    }
+
     const { gems, targetLevel, gemCode } = upgrade;
     const keepTower = gems[0];
     const consumed = gems.slice(1);
@@ -397,6 +408,11 @@ export class Game {
    * and the partner towers turn into stone slates!
    */
   combineAtTower(tower, combination) {
+    if (this.phase !== GAME_PHASES.CHOOSING || this.placedGemsThisTurn.length < CONFIG.GEMS_PER_ROUND) {
+      SOUND.playError();
+      return false;
+    }
+
     if (!tower || !combination) return false;
 
     const { partnerTowers } = combination;
@@ -1029,6 +1045,13 @@ export class Game {
     const waveBonus = 10 + this.currentWave * 2;
     this.gold += waveBonus;
     this.addFloatingText(this.width / 2 || 400, 200, `Wave ${this.currentWave} Complete! +${waveBonus}G`, '#4ade80', 20, true);
+
+    if (this.currentWave % 10 === 0) {
+      const milestoneGold = 75 + this.currentWave * 3;
+      this.gold += milestoneGold;
+      this.chanceLevel = Math.min(this.chanceLevel + 1, CONFIG.CHANCE_UPGRADES.length - 1);
+      this.addFloatingText(this.width / 2 || 400, 230, `Milestone Reward! +${milestoneGold}G • Rarity Up`, '#fbbf24', 18, true);
+    }
 
     // Calculate Round MVP Tower based on waveDamageDealt
     const activeTowers = this.getAllGems().filter(t => !t.isSlate);
