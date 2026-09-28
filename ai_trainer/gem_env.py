@@ -484,10 +484,63 @@ class GemTDEnv:
 
         return tower
 
+    def combine_duplicate(self, dup):
+        """
+        Combine a 2x pair or 4x quad duplicate gem roll into an upgraded tower.
+        Target level = lvl + 1 (for pair) or lvl + 2 (for quad).
+        """
+        c = dup['code']
+        target_lvl = min(5, dup['target'])
+        matching_idx = 0
+        for i, (gc, gl) in enumerate(self.current_round_gems):
+            if gc == c and gl == dup['level']:
+                matching_idx = i
+                break
+
+        chosen_coord = self.placed_coords_this_round[matching_idx]
+        stats = BASE_GEM_STATS[c]
+        tower = {
+            'x': chosen_coord[0],
+            'y': chosen_coord[1],
+            'code': c,
+            'level': target_lvl,
+            'type': f"{c}{target_lvl}",
+            'damage': stats['damage'][target_lvl],
+            'speed': stats['attack_speed'][target_lvl],
+            'range': stats['range'][target_lvl],
+            'effect': stats['effect'],
+            'is_special': False
+        }
+        self.towers.append(tower)
+
+        # Other 4 become slates
+        for i, coord in enumerate(self.placed_coords_this_round):
+            if i != matching_idx:
+                self.slates.append(coord)
+
+        return tower
+
     def craft_special_tower(self, recipe_name, chosen_coord_idx=0):
         """Craft a special recipe using available gems."""
         spec = SPECIAL_RECIPES[recipe_name]
         chosen_coord = self.placed_coords_this_round[chosen_coord_idx]
+
+        # Deduct ingredients that were already on board
+        reqs = list(spec['recipe'])
+        for gc, gl in self.current_round_gems:
+            code_str = f"{gc}{gl}"
+            if code_str in reqs:
+                reqs.remove(code_str)
+
+        new_towers = []
+        for t in self.towers:
+            t_code = t['type']
+            if t_code in reqs:
+                reqs.remove(t_code)
+                self.slates.append((t['x'], t['y']))
+            else:
+                new_towers.append(t)
+        self.towers = new_towers
 
         tower = {
             'x': chosen_coord[0],
@@ -512,11 +565,7 @@ class GemTDEnv:
     def simulate_wave_combat(self):
         """
         Fast analytical/event combat simulation for the current wave.
-        Returns:
-            creeps_killed: int
-            damage_dealt: float
-            lives_lost: int
-            gold_earned: int
+        Uses sequential focus-fire damage pools and realistic creep flight/ground paths.
         """
         wave_idx = self.wave - 1
         if wave_idx >= len(WAVES_DATA):
@@ -536,72 +585,55 @@ class GemTDEnv:
         else:
             armor_mult = 2.0 - (0.95 ** (-creep_armor))
 
-        # Check total time creeps spend traveling the path
-        total_path_px = len(self.full_path) * 24.0
-        traversal_time = total_path_px / max(1.0, creep_speed)
+        # Flying creeps take straight checkpoint route, ground creeps navigate maze
+        path = [(2,2), (30,2), (30,30), (2,30), (16,16)] if is_flying else self.full_path
+        total_path_px = 112.0 * 24.0 if is_flying else len(self.full_path) * 24.0
 
-        # Calculate total DPS potential of all towers over the path
-        total_dps = 0.0
+        # Slow effects
         total_slow = 0.0
-        total_poison_dps = 0.0
-        total_burn_dps = 0.0
-
         for t in self.towers:
-            # Tower coverage: fraction of path in tower range
+            if t.get('effect') == 'slow':
+                total_slow = max(total_slow, 0.35)
+            elif t.get('effect') == 'cleave_slow':
+                total_slow = max(total_slow, 0.40)
+        eff_speed = creep_speed * (1.0 - min(0.65, total_slow))
+        traversal_time = total_path_px / max(1.0, eff_speed)
+        wave_duration = (total_creeps - 1) * 0.9 + traversal_time
+
+        # Calculate damage pools
+        total_dmg_pool = 0.0
+        for t in self.towers:
             tx_px = t['x'] * 24 + 12
             ty_px = t['y'] * 24 + 12
             trange = t['range']
 
-            in_range_steps = 0
-            for px, py in self.full_path:
-                cx_px = px * 24 + 12
-                cy_px = py * 24 + 12
-                if math.hypot(tx_px - cx_px, ty_px - cy_px) <= trange:
-                    in_range_steps += 1
+            in_range_steps = sum(1 for px, py in path if math.hypot(tx_px - (px * 24 + 12), ty_px - (py * 24 + 12)) <= trange)
+            if in_range_steps == 0:
+                continue
+            coverage_ratio = in_range_steps / max(1, len(path))
+            t_window = traversal_time * coverage_ratio
+            active_time = min(wave_duration, t_window + (total_creeps - 1) * 0.9)
 
-            coverage_ratio = in_range_steps / max(1, len(self.full_path))
-            eff_time = traversal_time * coverage_ratio
-
-            # Base damage per attack
             dmg = t['damage']
             speed = t['speed']
             effect = t.get('effect')
 
-            # Special effects
-            if effect == 'slow':
-                total_slow = max(total_slow, 0.35)
+            mult = 2.0 if (effect == 'anti_air' and is_flying) else 1.0
+            if effect == 'crit':
+                mult *= 1.8
+            if effect == 'burn_aura':
+                total_dmg_pool += t.get('burn_dps', 80.0) * t_window * total_creeps
             elif effect == 'poison':
-                total_poison_dps += 80.0
-            elif effect == 'burn_aura':
-                total_burn_dps += t.get('burn_dps', 80.0)
-            elif effect == 'anti_air' and is_flying:
-                dmg *= 2.0
+                total_dmg_pool += 80.0 * t_window * total_creeps
+            total_dmg_pool += dmg * speed * armor_mult * mult * active_time
 
-            # DPS contribution
-            tower_dps = dmg * speed * armor_mult
-            total_dps += tower_dps * coverage_ratio
+        creeps_killed = min(total_creeps, int(total_dmg_pool / max(1.0, creep_hp)))
+        leaked = total_creeps - creeps_killed
+        damage_dealt = min(total_creeps * creep_hp, total_dmg_pool)
 
-        # Slow extends traversal time
-        if total_slow > 0:
-            traversal_time /= (1.0 - min(0.65, total_slow))
-
-        # Total expected damage dealt per creep
-        dmg_per_creep = (total_dps + total_poison_dps + total_burn_dps) * (traversal_time / total_creeps)
-
-        # Determine kills
-        creeps_killed = 0
-        lives_lost = 0
-        damage_dealt = 0.0
-
-        for _ in range(total_creeps):
-            if dmg_per_creep >= creep_hp:
-                creeps_killed += 1
-                damage_dealt += creep_hp
-            else:
-                damage_dealt += dmg_per_creep
-                lives_lost += 1
-
+        lives_lost = leaked * (10 if w_data['boss'] else 1)
         gold_earned = creeps_killed * w_data['gold']
+
         self.lives -= lives_lost
         self.gold += gold_earned
         self.score += int(damage_dealt)

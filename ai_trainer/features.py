@@ -111,4 +111,33 @@ def extract_state_features(env):
         next_cost = CHANCE_UPGRADES[env.chance_level]['cost']
     feats.append(1.0 if env.gold >= next_cost else 0.0)
     feats.append(max(0.0, (35.0 - env.lives) / 35.0))
-    feats
+    feats.append(1.0 if w_data['boss'] else 0.0)
+
+    return torch.tensor(feats, dtype=torch.float32).unsqueeze(0)
+
+
+def get_action_mask(env):
+    """
+    Returns boolean mask of length 9 indicating which actions are currently legal:
+    0-4: Keep gem 0..4 (always valid if 5 gems placed)
+    5: Craft recipe (valid only if special recipe is craftable)
+    6: Combine duplicate (valid only if duplicate pair/quad exists)
+    7: Relocate Outer Tower to Central Killzone (valid if affordable & beneficial)
+    8: Shop: Castle Repair or Boss Trap (valid if affordable & needed)
+    """
+    mask = [True, True, True, True, True, False, False, False, False]
+    avail_recipes = env.find_available_recipes()
+    if len(avail_recipes) > 0:
+        mask[5] = True
+
+    dup_upgrades = env.find_duplicate_upgrades()
+    if len(dup_upgrades) > 0:
+        mask[6] = True
+
+    if env.get_best_relocation() is not None:
+        mask[7] = True
+
+    if env.can_heal_castle() or env.can_buy_boss_trap():
+        mask[8] = True
+
+    return mask

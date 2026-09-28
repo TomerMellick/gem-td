@@ -6,25 +6,42 @@ import { SPECIAL_TOWERS } from './recipes.js';
 
 const BASE_GEM_CODES = ['B', 'D', 'Y', 'E', 'G', 'Q', 'R', 'P'];
 
-// Strategic mazing coordinates template (central killzone & serpentine detours)
-const STRATEGIC_MAZE_TEMPLATE = [];
-// 1. Central killzone rings around (16, 16)
-for (const r of [14, 15, 17, 18]) {
-  for (const c of [14, 15, 17, 18]) {
-    STRATEGIC_MAZE_TEMPLATE.push({ x: c, y: r });
+// Spiral Labyrinth concentric rings with alternating entry gates
+function buildSpiralTemplate() {
+  function buildRing(minC, maxC, gateCoord) {
+    const coords = [];
+    for (let x = minC; x <= maxC; x++) {
+      if (x !== gateCoord.x || minC !== gateCoord.y) coords.push({ x, y: minC });
+    }
+    for (let y = minC; y <= maxC; y++) {
+      if (maxC !== gateCoord.x || y !== gateCoord.y) coords.push({ x: maxC, y });
+    }
+    for (let x = maxC; x >= minC; x--) {
+      if (x !== gateCoord.x || maxC !== gateCoord.y) coords.push({ x, y: maxC });
+    }
+    for (let y = maxC; y >= minC; y--) {
+      if (minC !== gateCoord.x || y !== gateCoord.y) coords.push({ x: minC, y });
+    }
+    const seen = new Set();
+    const res = [];
+    for (const c of coords) {
+      const key = `${c.x},${c.y}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        res.push(c);
+      }
+    }
+    return res;
   }
+
+  const r1 = buildRing(13, 19, { x: 16, y: 13 }); // gate at top
+  const r2 = buildRing(10, 22, { x: 16, y: 22 }); // gate at bottom
+  const r3 = buildRing(7, 25, { x: 16, y: 7 });   // gate at top
+  const r4 = buildRing(4, 28, { x: 16, y: 28 });  // gate at bottom
+  return [...r1, ...r2, ...r3, ...r4];
 }
-// 2. Concentric rings forcing serpentine detours
-for (const offset of [4, 6, 8, 10, 12]) {
-  for (let x = 16 - offset; x <= 16 + offset; x += 2) {
-    STRATEGIC_MAZE_TEMPLATE.push({ x, y: 16 - offset });
-    STRATEGIC_MAZE_TEMPLATE.push({ x, y: 16 + offset });
-  }
-  for (let y = 16 - offset; y <= 16 + offset; y += 2) {
-    STRATEGIC_MAZE_TEMPLATE.push({ x: 16 - offset, y });
-    STRATEGIC_MAZE_TEMPLATE.push({ x: 16 + offset, y });
-  }
-}
+
+const STRATEGIC_MAZE_TEMPLATE = buildSpiralTemplate();
 
 /**
  * Lightweight in-browser neural network inference engine
@@ -222,31 +239,120 @@ export class AIAgent {
     feats.push(dupes.some(d => d.type === 'pair') ? 1.0 : 0.0);
     feats.push(dupes.some(d => d.type === 'quad') ? 1.0 : 0.0);
 
+    // 6. Shop & Tower Relocation Features (8 features)
+    const relocPlan = this.findBestRelocation();
+    feats.push(g.gold >= CONFIG.MOVE_TOWER_COST ? 1.0 : 0.0);
+    feats.push(relocPlan ? Math.min(1.0, relocPlan.gain / 200.0) : 0.0);
+    feats.push((g.gold >= CONFIG.HEAL_CASTLE_COST && g.lives <= 35) ? 1.0 : 0.0);
+    const waveData = g.getWaveData ? g.getWaveData() : {};
+    feats.push((waveData.isBoss && g.gold >= 30) ? 1.0 : 0.0);
+    feats.push(Math.min(g.gold / 100.0, 1.0));
+    const nextChanceCost = CONFIG.CHANCE_UPGRADES[g.chanceLevel]?.cost || 9999;
+    feats.push(g.gold >= nextChanceCost ? 1.0 : 0.0);
+    feats.push(Math.max(0.0, (35.0 - g.lives) / 35.0));
+    feats.push(waveData.isBoss ? 1.0 : 0.0);
+
     return feats;
   }
 
+  findBestRelocation() {
+    if (this.game.gold < CONFIG.MOVE_TOWER_COST) return null;
+    const allTowers = this.game.getAllGems();
+    if (!allTowers || allTowers.length === 0) return null;
+
+    const center = 16.0;
+    // Find candidate slates near center
+    const slates = [];
+    for (let y = 13; y <= 19; y++) {
+      for (let x = 13; x <= 19; x++) {
+        const t = this.game.towerGrid[y][x];
+        if (t && t.isSlate) {
+          const dist = Math.hypot(x - center, y - center);
+          slates.push({ x, y, dist });
+        }
+      }
+    }
+    if (slates.length === 0) return null;
+    slates.sort((a, b) => a.dist - b.dist);
+    const bestSlate = slates[0];
+
+    // Find outer high-value tower
+    let bestPlan = null;
+    let maxGain = 0;
+    for (const t of allTowers) {
+      if (t.isSlate) continue;
+      const currentDist = Math.hypot(t.tileX - center, t.tileY - center);
+      const isHighValue = t.isSpecial || t.level >= 2;
+      if (isHighValue && currentDist > 7.0) {
+        const gain = (currentDist - bestSlate.dist) * (t.damage * t.attackSpeed);
+        if (gain > maxGain) {
+          maxGain = gain;
+          bestPlan = { tower: t, targetX: bestSlate.x, targetY: bestSlate.y, gain };
+        }
+      }
+    }
+    return bestPlan;
+  }
+
   getActionMask() {
-    const mask = [true, true, true, true, true, false, false];
+    const mask = [true, true, true, true, true, false, false, false, false];
     const availRecipes = this.game.getAvailableRecipes();
     if (availRecipes && availRecipes.length > 0) mask[5] = true;
 
     const dupes = this.game.getAvailableDuplicateUpgrades();
     if (dupes && dupes.length > 0) mask[6] = true;
+
+    if (this.findBestRelocation()) mask[7] = true;
+
+    const waveData = this.game.getWaveData ? this.game.getWaveData() : {};
+    const canHeal = this.game.gold >= CONFIG.HEAL_CASTLE_COST && this.game.lives <= 35;
+    const canTrap = waveData.isBoss && this.game.gold >= 30;
+    if (canHeal || canTrap) mask[8] = true;
+
     return mask;
   }
 
   findNextMazePlacement() {
-    // 1. Try template slots
-    for (const coord of STRATEGIC_MAZE_TEMPLATE) {
-      if (this.game.canPlaceAt(coord.x, coord.y)) {
-        return coord;
+    const g = this.game;
+    const pf = g.pathfinding;
+    const route = pf.validateFullRoute(g.grid, false);
+    const path = route.fullPath;
+    let bestCoord = null;
+    let bestLen = -1;
+
+    // 1. Actively maximize creep maze path by finding optimal detour point
+    if (path && path.length > 2) {
+      for (let i = 1; i < path.length - 1; i++) {
+        const pt = path[i];
+        if (g.canPlaceAt(pt.x, pt.y)) {
+          g.grid[pt.y][pt.x] = 4;
+          const r = pf.validateFullRoute(g.grid, false);
+          if (r.valid && r.totalLength > bestLen) {
+            bestLen = r.totalLength;
+            bestCoord = pt;
+          }
+          g.grid[pt.y][pt.x] = 0;
+        }
       }
     }
 
-    // 2. Fallback to staggered grid slots
+    if (bestCoord) return bestCoord;
+
+    // 2. Central zone fallback
+    for (let r = 1; r <= 8; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const x = 16 + dx;
+          const y = 16 + dy;
+          if (g.canPlaceAt(x, y)) return { x, y };
+        }
+      }
+    }
+
+    // 3. Fallback to staggered grid slots
     for (let x = 6; x <= 26; x += 3) {
       for (let y = 6; y <= 26; y += 3) {
-        if (this.game.canPlaceAt(x, y)) {
+        if (g.canPlaceAt(x, y)) {
           return { x, y };
         }
       }
@@ -274,13 +380,14 @@ export class AIAgent {
       return;
     }
 
-    // --- PHASE 2: CHOOSING (Keep gem or craft recipe) ---
+    // --- PHASE 2: CHOOSING (Keep gem, craft recipe, relocate, or shop) ---
     if (this.game.phase === 'CHOOSING') {
       const placed = this.game.placedGemsThisTurn;
       if (!placed || placed.length === 0) return;
 
       const availRecipes = this.game.getAvailableRecipes();
       const dupes = this.game.getAvailableDuplicateUpgrades();
+      const relocPlan = this.findBestRelocation();
 
       // Check neural network evaluation
       let chosenAction = 0;
@@ -301,8 +408,8 @@ export class AIAgent {
         // Heuristic fallback
         if (availRecipes && availRecipes.length > 0) chosenAction = 5;
         else if (dupes && dupes.length > 0) chosenAction = 6;
+        else if (relocPlan && Math.random() < 0.6) chosenAction = 7;
         else {
-          // Pick highest level gem, or highest damage
           let bestIdx = 0;
           let maxLvl = -1;
           placed.forEach((g, idx) => {
@@ -322,10 +429,28 @@ export class AIAgent {
         this.thought = `Crafted Special Tower: ${rec.name} (${rec.def.tier})! Massive DPS boost.`;
         this.confidence = 0.98;
       } else if (chosenAction === 6 && dupes && dupes.length > 0) {
-        // Pick best gem from dupes
         this.game.keepGem(placed[0]);
         this.thought = `Selected duplicate gem for high-tier combine!`;
         this.confidence = 0.90;
+      } else if (chosenAction === 7 && relocPlan) {
+        // Keep best round gem first, then relocate outer powerhouse
+        const kept = placed[0];
+        this.game.keepGem(kept);
+        this.game.moveTower(relocPlan.tower, relocPlan.targetX, relocPlan.targetY);
+        this.thought = `🔀 Relocated ${relocPlan.tower.name} to central killzone (${relocPlan.targetX}, ${relocPlan.targetY})!`;
+        this.confidence = 0.95;
+      } else if (chosenAction === 8) {
+        const kept = placed[0];
+        this.game.keepGem(kept);
+        if (this.game.lives <= 35 && this.game.gold >= CONFIG.HEAL_CASTLE_COST) {
+          this.game.healCastle();
+          this.thought = `🏰 Purchased Castle Repair (+10 Lives) at ${this.game.lives} HP!`;
+        } else if (this.game.gold >= 30) {
+          const cp = CONFIG.CHECKPOINTS[4];
+          this.game.placeTrap('frost', cp.x, cp.y - 1);
+          this.thought = `❄️ Deployed Frost Sigil Trap at castle gate for incoming Boss!`;
+        }
+        this.confidence = 0.93;
       } else {
         const idx = Math.min(chosenAction, placed.length - 1);
         const kept = placed[idx];
@@ -349,6 +474,12 @@ export class AIAgent {
             this.lastActionTime = now;
           }
         }
+      }
+      // Clutch castle heal if critically low during combat
+      if (this.game.lives <= 20 && this.game.gold >= CONFIG.HEAL_CASTLE_COST) {
+        this.game.healCastle();
+        this.thought = `🏰 Emergency Castle Repair (+10 Lives)!`;
+        this.lastActionTime = now;
       }
     }
   }

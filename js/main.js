@@ -27,6 +27,7 @@ window.addEventListener('DOMContentLoaded', () => {
   window.ui = ui;
   window.renderer = renderer;
   window.ai = ai;
+  window.CONFIG = CONFIG;
 
   // AI Autoplay UI Controls
   const btnAi = document.getElementById('btn-ai');

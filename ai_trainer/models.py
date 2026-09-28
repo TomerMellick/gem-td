@@ -15,7 +15,7 @@ class GemDecisionNetwork(nn.Module):
     - Craft special recipe
     - Combine duplicate
     """
-    def __init__(self, input_dim=96, hidden_dim=128, num_actions=7):
+    def __init__(self, input_dim=104, hidden_dim=128, num_actions=9):
         super().__init__()
         self.input_dim = input_dim
         self.num_actions = num_actions

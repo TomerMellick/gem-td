@@ -1,0 +1,16 @@
+{
+  "name": "gem-td",
+  "version": "1.0.0",
+  "description": "Gem TD - Strategic Tower Defense with Deterministic Playwright Browser Agent",
+  "main": "play_game.js",
+  "scripts": {
+    "play": "node play_game.js",
+    "play:watch": "node play_game.js --watch",
+    "play:headed": "node play_game.js --headed",
+    "play:wave25": "node play_game.js --target-wave 25",
+    "test": "node play_game.js"
+  },
+  "dependencies": {
+    "playwright-core": "./package"
+  }
+}
