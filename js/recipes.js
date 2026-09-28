@@ -14,6 +14,7 @@ export const SPECIAL_TOWERS = {
     effect: 'slow',
     effectValue: 0.35, // 35% slow
     effectDuration: 3.5,
+    damageType: 'physical',
     description: 'Slows enemies by 35%. Excellent early game tower.',
     lore: 'A finely refined silver tower emitting a freezing mist.'
   },
@@ -29,6 +30,7 @@ export const SPECIAL_TOWERS = {
     glow: '#059669',
     effect: 'split',
     effectValue: 4, // attacks up to 4 targets
+    damageType: 'physical',
     description: 'Split Shot: Attacks up to 4 enemies at the same time.',
     lore: 'Ancient malachite stone carved into an arrow battery.'
   },
@@ -45,6 +47,7 @@ export const SPECIAL_TOWERS = {
     effect: 'burn_aura',
     effectValue: 80, // 80 dmg/sec aura
     effectRadius: 160,
+    damageType: 'magic',
     description: 'Burn Aura: Radiates 80 fire damage every second to all nearby enemies.',
     lore: 'A pulsing crimson gem radiating searing heat waves.'
   },
@@ -61,6 +64,7 @@ export const SPECIAL_TOWERS = {
     effect: 'poison',
     effectValue: 80, // 80 dps poison for 5s
     effectDuration: 5.0,
+    damageType: 'magic',
     description: 'Potent Venom: Enemies suffer 80 poison damage per second for 5 seconds.',
     lore: 'An emerald-like talisman dripping with concentrated serpent venom.'
   },
@@ -78,6 +82,7 @@ export const SPECIAL_TOWERS = {
     effectValue: { armor: -10, slow: 0.35 },
     effectRadius: 180,
     description: 'Air Disruption Aura: Decreases flying creeps armor by 10 and speed by 35%.',
+    damageType: 'physical',
     lore: 'High-frequency quartz crystal resonance that grounds winged beasts.'
   },
   'Silver Knight': {
@@ -93,6 +98,7 @@ export const SPECIAL_TOWERS = {
     effect: 'cleave_slow',
     effectValue: { cleavePercent: 0.50, cleaveRadius: 100, slow: 0.40 },
     description: 'Cleave & Slow: Deals 50% splash damage around target and slows enemies by 40%.',
+    damageType: 'physical',
     lore: 'An armored sentinel delivering punishing sweeping strikes.'
   },
   'Pink Diamond': {
@@ -107,6 +113,7 @@ export const SPECIAL_TOWERS = {
     glow: '#e11d48',
     effect: 'crit',
     effectValue: { chance: 0.20, multiplier: 5.0 }, // 20% 5x crit
+    damageType: 'physical',
     description: 'Lethal Critical: 20% chance to inflict 5x massive physical critical damage.',
     lore: 'Flawless pink diamond with cut facets sharp enough to pierce stone.'
   },
@@ -122,6 +129,7 @@ export const SPECIAL_TOWERS = {
     glow: '#047857',
     effect: 'split',
     effectValue: 7, // hits up to 7 enemies
+    damageType: 'physical',
     description: 'Enhanced Split: Attacks up to 7 enemies simultaneously with piercing darts.',
     lore: 'Swirling emerald mineral charged with multi-threaded arcane force.'
   },
@@ -137,6 +145,7 @@ export const SPECIAL_TOWERS = {
     glow: '#4d7c0f',
     effect: 'split',
     effectValue: 5,
+    damageType: 'physical',
     description: 'Isotope Cannon: Fires high-frequency radioactive bursts hitting 5 enemies.',
     lore: 'A radioactive heavy isotope humming with unstable nuclear energy.'
   },
@@ -153,6 +162,7 @@ export const SPECIAL_TOWERS = {
     effect: 'burn_aura',
     effectValue: 400, // 400 dps aura
     effectRadius: 180,
+    damageType: 'magic',
     description: 'Magma Field Aura: Immolates all nearby enemies for 400 fire damage per second.',
     lore: 'Torn from the mantle of a volcanic caldera, melting the ground around it.'
   },
@@ -168,6 +178,7 @@ export const SPECIAL_TOWERS = {
     glow: '#7f1d1d',
     effect: 'chain_lightning',
     effectValue: { chance: 0.30, jumps: 5, damage: 350 },
+    damageType: 'magic',
     description: 'Blood Lightning: 30% chance to unleash chain lightning leaping across 5 enemies.',
     lore: 'Forged from coagulated dragon blood and thunderstorm quartz.'
   },
@@ -184,6 +195,7 @@ export const SPECIAL_TOWERS = {
     effect: 'aura_range_poison',
     effectValue: { rangeBonus: 60, poisonDps: 180, duration: 5.0 },
     effectRadius: 160,
+    damageType: 'magic',
     description: 'Overlook Aura: Increases attack range of nearby allied towers by +60. Deals 180 poison DPS.',
     lore: 'Grants keen foresight to nearby guardians.'
   },
@@ -200,6 +212,7 @@ export const SPECIAL_TOWERS = {
     effect: 'armor_shred',
     effectValue: 25, // -25 armor
     effectDuration: 5.0,
+    damageType: 'physical',
     description: 'Armor Corrosion: Renders enemy defenses brittle, stripping 25 armor.',
     lore: 'Molten golden alloy that dissolves natural armor.'
   },
@@ -215,6 +228,7 @@ export const SPECIAL_TOWERS = {
     glow: '#047857',
     effect: 'stun',
     effectValue: { chance: 0.20, duration: 1.2 }, // 20% stun 1.2s
+    damageType: 'magic',
     description: 'Deep Stun: 20% chance on attack to completely stun target for 1.2 seconds.',
     lore: 'A sinister verdant crystal capable of halting charging behemoths.'
   },
@@ -231,6 +245,7 @@ export const SPECIAL_TOWERS = {
     effect: 'armor_aura',
     effectValue: 15, // -15 armor aura
     effectRadius: 170,
+    damageType: 'magic',
     description: 'Decadence Aura: Weakens armor of all nearby enemies within radius by 15.',
     lore: 'Luminous neon blue mineral radiating a weakening geomagnetic field.'
   },
@@ -247,6 +262,7 @@ export const SPECIAL_TOWERS = {
     effect: 'aura_haste_inspire',
     effectValue: { speedBonus: 0.50, damageBonus: 0.40 }, // +50% atk speed & +40% dmg
     effectRadius: 160,
+    damageType: 'magic',
     description: 'Cat\'s Eye Aura: Empowers nearby towers with +50% attack speed and +40% bonus damage.',
     lore: 'A slit-pupil gem that sharpens the instincts of surrounding towers.'
   },
@@ -264,6 +280,7 @@ export const SPECIAL_TOWERS = {
     effectValue: 0.65, // 65% slow aura
     effectRadius: 170,
     description: 'Glacial Cold Aura: Slows movement speed of all nearby enemies by 65%.',
+    damageType: 'magic',
     lore: 'An icy golden sapphire freezing the air into sub-zero frost.'
   },
   'Uranium-235': {
@@ -278,6 +295,7 @@ export const SPECIAL_TOWERS = {
     glow: '#65a30d',
     effect: 'split',
     effectValue: 10, // attacks 10 enemies
+    damageType: 'physical',
     description: 'Fission Gatling: Emits a relentless barrage striking up to 10 enemies at once.',
     lore: 'Refined weapons-grade fissile material unleashing unstoppable radiation.'
   },
@@ -294,6 +312,7 @@ export const SPECIAL_TOWERS = {
     effect: 'forked_lightning_burn',
     effectValue: { chance: 0.35, jumps: 6, damage: 1200, burnDps: 400 },
     effectRadius: 180,
+    damageType: 'magic',
     description: 'Forked Wrath: 35% chance to cast forked lightning (1,200 dmg) + 400 Burn Aura.',
     lore: 'An ancient relic throbbing like a demonic heart, boiling nearby air.'
   },
@@ -310,6 +329,7 @@ export const SPECIAL_TOWERS = {
     effect: 'true_strike_aura',
     effectValue: { poisonDps: 300, rangeBonus: 80, trueStrike: true },
     effectRadius: 180,
+    damageType: 'magic',
     description: 'True Strike Aura: Attacks ignore enemy evasion. +80 Range to allies. 300 Poison DPS.',
     lore: 'Blessed with Sun Wukong\'s golden staff, strikes never miss their mark.'
   },
@@ -325,6 +345,7 @@ export const SPECIAL_TOWERS = {
     glow: '#d97706',
     effect: 'corrupt_greed',
     effectValue: { armorReduction: 40, greedChance: 0.15, greedMin: 5, greedMax: 20 },
+    damageType: 'physical',
     description: 'Pharaoh\'s Midas: -40 armor shred + 15% chance to extract 5-20 bonus gold on attack!',
     lore: 'Ancient pharaonic treasury that turns monster blood into glittering coins.'
   },
@@ -340,6 +361,7 @@ export const SPECIAL_TOWERS = {
     glow: '#065f46',
     effect: 'stone_gaze',
     effectValue: { stunChance: 0.25, armorReduction: 25, petrifySlow: 0.75 },
+    damageType: 'magic',
     description: 'Stone Gaze: Stuns for 1.5s (25%), reduces armor by 25, and petrifies enemies with 75% slow.',
     lore: 'A towering stone golem whose mere glare turns flesh into brittle granite.'
   },
@@ -355,6 +377,7 @@ export const SPECIAL_TOWERS = {
     glow: '#9d174d',
     effect: 'cleave_crit_slow',
     effectValue: { cleavePercent: 0.60, cleaveRadius: 120, critChance: 0.25, critMultiplier: 5.0, slow: 0.45 },
+    damageType: 'physical',
     description: 'Diamond Shatter: 25% 5x Crit, 60% Cleave AoE, and 45% Movement Slow.',
     lore: 'Colossal gemstone of peerless brilliance delivering earth-shaking impacts.'
   },
@@ -370,6 +393,7 @@ export const SPECIAL_TOWERS = {
     glow: '#0284c7',
     effect: 'split',
     effectValue: 8,
+    damageType: 'magic',
     description: 'Prismatic Ray: Rapidly fires beams hitting up to 8 targets at 2.5 attacks/sec.',
     lore: 'Formed from deep planetary pressure, firing laser-like crystal shafts.'
   },
@@ -385,6 +409,7 @@ export const SPECIAL_TOWERS = {
     glow: '#27272a',
     effect: 'cleave_slow',
     effectValue: { cleavePercent: 0.70, cleaveRadius: 150, slow: 0.60 },
+    damageType: 'physical',
     description: 'Abyssal Cataclysm: 70% Pure Cleave in huge radius, slows target by 60%. Enormous 1,250 damage.',
     lore: 'Volcanic glass forged in the underworld, crushing all mortal defenses.'
   },
@@ -401,6 +426,7 @@ export const SPECIAL_TOWERS = {
     effect: 'burn_aura',
     effectValue: 2000, // 2000 dps aura
     effectRadius: 180,
+    damageType: 'magic',
     description: 'Hellfire Inferno: Deals a staggering 2,000 magic damage every second to all nearby enemies!',
     lore: 'A core of eternal hellfire that incinerates anything entering its aura.'
   },
@@ -417,6 +443,7 @@ export const SPECIAL_TOWERS = {
     effect: 'cullinan_strike',
     effectValue: { trueStrike: true, poisonDps: 400, rangeBonus: 100 },
     effectRadius: 200,
+    damageType: 'physical',
     description: 'Great Star of Africa: 3,164 base damage! Never misses, +100 Range aura, 400 Poison DPS.',
     lore: 'The largest gem-quality rough diamond ever found, crowned with celestial power.'
   },
@@ -433,6 +460,7 @@ export const SPECIAL_TOWERS = {
     effect: 'splash',
     effectRadius: 80,
     effectValue: 1.0, // 100% splash damage
+    damageType: 'physical',
     description: 'Wings of Aegis: 100% full area splash damage in 80 radius, shattering swarms.',
     lore: 'Commemorating the legendary champions, bathed in golden immortality.'
   },
@@ -448,6 +476,7 @@ export const SPECIAL_TOWERS = {
     glow: '#059669',
     effect: 'global_speed_aura',
     effectValue: 1.50, // +150% attack speed to ALL towers on map
+    damageType: 'magic',
     description: 'Dynasty Rhythm: Bestows +150% attack speed to EVERY allied tower on the entire battlefield!',
     lore: 'The heartbeat of tactical discipline, turning all towers into rapid cannons.'
   }

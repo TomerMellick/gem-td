@@ -82,17 +82,21 @@ export class Trap {
 }
 
 export class FloatingText {
-  constructor(x, y, text, color = '#ffffff', fontSize = 14, isCrit = false) {
-    this.x = x + (Math.random() - 0.5) * 12;
+  constructor(x, y, text, color = '#ffffff', fontSize = 14, isCrit = false, type = 'physical', icon = '') {
+    this.x = x + (Math.random() - 0.5) * 16;
     this.y = y;
     this.text = text;
     this.color = color;
-    this.fontSize = isCrit ? fontSize * 1.35 : fontSize;
+    this.fontSize = isCrit ? fontSize * 1.4 : fontSize;
     this.isCrit = isCrit;
+    this.type = type;
+    this.icon = icon;
     this.alpha = 1.0;
-    this.vy = isCrit ? -45 : -30;
-    this.vx = (Math.random() - 0.5) * 15;
-    this.lifetime = 0.85;
+    this.scale = isCrit ? 1.6 : 1.25;
+    this.targetScale = 1.0;
+    this.vy = isCrit ? -55 : -35;
+    this.vx = (Math.random() - 0.5) * 20;
+    this.lifetime = isCrit ? 1.1 : 0.85;
     this.age = 0;
   }
 
@@ -100,28 +104,60 @@ export class FloatingText {
     this.age += dt;
     this.x += this.vx * dt;
     this.y += this.vy * dt;
-    this.alpha = Math.max(0, 1.0 - (this.age / this.lifetime));
+    this.vy += 15 * dt; // subtle gravity deceleration
+    // Scale easing towards 1.0
+    this.scale += (this.targetScale - this.scale) * Math.min(1, dt * 8);
+    this.alpha = Math.max(0, 1.0 - Math.pow(this.age / this.lifetime, 1.8));
     return this.age < this.lifetime;
   }
 }
 
 export class Particle {
-  constructor(x, y, color = '#ffffff', vx = 0, vy = 0, size = 3, life = 0.4) {
+  constructor(x, y, color = '#ffffff', vx = 0, vy = 0, size = 3, life = 0.4, type = 'spark', options = {}) {
     this.x = x;
     this.y = y;
     this.color = color;
     this.vx = vx;
     this.vy = vy;
     this.size = size;
+    this.initialSize = size;
     this.life = life;
     this.age = 0;
     this.alpha = 1.0;
+    this.type = type; // 'spark', 'ember', 'frost_flake', 'poison_bubble', 'shock', 'ring', 'slash', 'star', 'smoke'
+    this.rotation = Math.random() * Math.PI * 2;
+    this.vRot = (Math.random() - 0.5) * 8;
+    this.maxRadius = options.maxRadius || size * 3;
+    this.radius = options.startRadius || 2;
+    this.targetRadius = options.targetRadius || size * 4;
+    this.arcStart = options.arcStart || 0;
+    this.arcEnd = options.arcEnd || Math.PI;
   }
 
   update(dt) {
     this.age += dt;
     this.x += this.vx * dt;
     this.y += this.vy * dt;
+    this.rotation += this.vRot * dt;
+
+    if (this.type === 'ember') {
+      this.vy -= 18 * dt; // embers float upward
+      this.vx += Math.sin(this.age * 12) * 12 * dt;
+      this.size = Math.max(1, this.initialSize * (1 - this.age / this.life));
+    } else if (this.type === 'poison_bubble') {
+      this.vy -= 12 * dt;
+      this.vx += Math.sin(this.age * 8) * 8 * dt;
+    } else if (this.type === 'frost_flake') {
+      this.vy += 8 * dt;
+      this.vRot += (Math.random() - 0.5) * 2 * dt;
+    } else if (this.type === 'ring') {
+      const progress = this.age / this.life;
+      this.radius = this.initialSize + (this.targetRadius - this.initialSize) * progress;
+    } else if (this.type === 'smoke') {
+      this.vy -= 14 * dt;
+      this.size = this.initialSize * (1 + (this.age / this.life) * 1.5);
+    }
+
     this.alpha = Math.max(0, 1 - (this.age / this.life));
     return this.age < this.life;
   }
@@ -451,7 +487,16 @@ export class Projectile {
     }
 
     if (res.immune) {
+      // Show IMMUNE text for the primary hit
       game.addFloatingText(this.target.x, this.target.y - 12, 'IMMUNE', '#f87171', 13);
+      // BUT still apply secondary debuffs that have their own immunity logic:
+      // Physical towers can carry magic debuffs (e.g. armorShred), and vice versa.
+      // applyDebuff() already checks isMagicImmune for magic debuffs internally.
+      if (this.effects.slow) this.target.applyDebuff('slow', this.effects.slow);
+      if (this.effects.armorShred) this.target.applyDebuff('armorShred', this.effects.armorShred);
+      if (this.effects.stun) this.target.applyDebuff('stun', this.effects.stun);
+      if (this.effects.poison) this.target.applyDebuff('poison', { ...this.effects.poison, source: this.source });
+      // Record source damage for debuff kills (handled separately) — skip primary damage recording
       return;
     }
 
@@ -891,7 +936,15 @@ export class Tower {
 
   fireAt(creep, game) {
     let damage = this.getEffectiveDamage();
-    let damageType = 'physical';
+    // Derive damageType from the gem/tower definition
+    let damageType = 'physical'; // default fallback
+    if (this.isSpecial) {
+      const def = SPECIAL_TOWERS[this.specialName];
+      damageType = (def && def.damageType) || 'physical';
+    } else if (this.code) {
+      const baseDef = BASE_GEMS[this.code];
+      damageType = (baseDef && baseDef.damageType) || 'physical';
+    }
     const projectileEffects = {};
     const projectileOptions = {};
 
