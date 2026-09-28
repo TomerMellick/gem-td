@@ -144,7 +144,9 @@ export class Game {
 
     this.placedGemsThisTurn = [];
     this.selectedTower = chosenTower;
+    this.updateRoute();
     SOUND.playKeepGem();
+    this.addFloatingText(chosenTower.pixelX, chosenTower.pixelY - 20, `${chosenTower.name}!`, '#38bdf8', 16, true);
 
     // Start wave
     this.startWave();
@@ -283,6 +285,7 @@ export class Game {
 
     this.updateRoute();
     SOUND.playCombine();
+    this.addFloatingText(keepTower.pixelX, keepTower.pixelY - 20, `${keepTower.name}!`, '#fbbf24', 16, true);
     return true;
   }
 

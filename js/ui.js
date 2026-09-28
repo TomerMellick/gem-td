@@ -9,6 +9,9 @@ export class UIController {
     this.game = game;
     this.renderer = renderer;
 
+    this.lastDockKey = null;
+    this.lastInspectorKey = null;
+
     this.cacheElements();
     this.bindEvents();
     this.renderCodex();
@@ -48,6 +51,18 @@ export class UIController {
     canvas.addEventListener('mousemove', (e) => this.onCanvasMouseMove(e));
     canvas.addEventListener('mouseleave', () => { this.game.hoverTile = null; });
     canvas.addEventListener('click', (e) => this.onCanvasClick(e));
+
+    // Permanent event delegation on Bottom Dock
+    this.elBottomDock.addEventListener('click', (e) => this.onDockClick(e));
+    this.elBottomDock.addEventListener('dblclick', (e) => this.onDockDblClick(e));
+
+    // Permanent event delegation on Inspector Panel
+    this.elInspector.addEventListener('click', (e) => this.onInspectorClick(e));
+
+    // Permanent event delegation on Codex List
+    if (this.codexList) {
+      this.codexList.addEventListener('click', (e) => this.onCodexClick(e));
+    }
 
     // Speed controls
     this.elSpeedBtns.forEach(btn => {
@@ -109,6 +124,7 @@ export class UIController {
         if (this.modalGameOver.open) this.modalGameOver.close();
         if (this.modalVictory.open) this.modalVictory.close();
         this.game.reset();
+        this.invalidateUI();
       });
     });
 
@@ -199,7 +215,164 @@ export class UIController {
       this.game.selectedTower = clickedTower;
     }
 
-    this.updateInspector();
+    this.invalidateUI();
+  }
+
+  onDockClick(e) {
+    SOUND.ensureContext();
+
+    // 1. Keep as Tower button
+    const keepBtn = e.target.closest('.keep-btn');
+    if (keepBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const idx = parseInt(keepBtn.dataset.idx, 10);
+      const chosen = this.game.placedGemsThisTurn[idx];
+      if (chosen) {
+        this.game.keepGem(chosen);
+        this.invalidateUI();
+      }
+      return;
+    }
+
+    // 2. Duplicate Combine button (Pair / Quad)
+    const dupBtn = e.target.closest('.dup-craft-btn');
+    if (dupBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const idx = parseInt(dupBtn.dataset.dupIdx, 10);
+      const combines = this.game.getAvailableDuplicateUpgrades();
+      const up = combines[idx];
+      if (up) {
+        this.game.applyDuplicateUpgrade(up);
+        this.invalidateUI();
+      }
+      return;
+    }
+
+    // 3. Special Tower Combine button
+    const specBtn = e.target.closest('.special-craft-btn');
+    if (specBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const recipeName = specBtn.dataset.recipe;
+      if (recipeName) {
+        this.game.craftSpecialTower(recipeName);
+        this.invalidateUI();
+      }
+      return;
+    }
+
+    // 4. Gem card click: select tower to inspect
+    const card = e.target.closest('.gem-card');
+    if (card) {
+      const idx = parseInt(card.dataset.idx, 10);
+      const tower = this.game.placedGemsThisTurn[idx];
+      if (tower) {
+        this.game.selectedTower = tower;
+        this.invalidateUI();
+      }
+      return;
+    }
+
+    // 5. Reroll button
+    const rerollBtn = e.target.closest('#btn-reroll');
+    if (rerollBtn) {
+      e.preventDefault();
+      this.game.rerollPlacedGems();
+      this.invalidateUI();
+      return;
+    }
+
+    // 6. Upgrade Chance button
+    const upChanceBtn = e.target.closest('#btn-upgrade-chance');
+    if (upChanceBtn) {
+      e.preventDefault();
+      this.game.upgradeChance();
+      this.invalidateUI();
+      return;
+    }
+  }
+
+  onDockDblClick(e) {
+    const card = e.target.closest('.gem-card');
+    if (card) {
+      const idx = parseInt(card.dataset.idx, 10);
+      const chosen = this.game.placedGemsThisTurn[idx];
+      if (chosen && this.game.phase === GAME_PHASES.CHOOSING) {
+        this.game.keepGem(chosen);
+        this.invalidateUI();
+      }
+    }
+  }
+
+  onInspectorClick(e) {
+    SOUND.ensureContext();
+    const demoBtn = e.target.closest('#btn-demolish-slate');
+    if (demoBtn && this.game.selectedTower && this.game.selectedTower.isSlate) {
+      e.preventDefault();
+      this.game.removeSlate(this.game.selectedTower.tileX, this.game.selectedTower.tileY);
+      this.invalidateUI();
+      return;
+    }
+
+    const keepBtn = e.target.closest('#btn-inspector-keep');
+    if (keepBtn) {
+      e.preventDefault();
+      const idx = parseInt(keepBtn.dataset.idx, 10);
+      const chosen = this.game.placedGemsThisTurn[idx];
+      if (chosen && this.game.phase === GAME_PHASES.CHOOSING) {
+        this.game.keepGem(chosen);
+        this.invalidateUI();
+      }
+      return;
+    }
+  }
+
+  onCodexClick(e) {
+    const btn = e.target.closest('.codex-craft-btn');
+    if (btn) {
+      SOUND.ensureContext();
+      const recipeName = btn.dataset.craft;
+      if (this.game.craftSpecialTower(recipeName)) {
+        this.modalCodex.close();
+        this.invalidateUI();
+      }
+    }
+  }
+
+  invalidateUI() {
+    this.lastDockKey = null;
+    this.lastInspectorKey = null;
+  }
+
+  getDockKey() {
+    const g = this.game;
+    if (g.phase === GAME_PHASES.BUILDING) {
+      const nextChanceCost = CONFIG.CHANCE_UPGRADES[g.chanceLevel]?.cost || 999999;
+      return `BUILDING_${g.placedGemsThisTurn.length}_${g.chanceLevel}_${g.gold >= nextChanceCost}`;
+    }
+    if (g.phase === GAME_PHASES.CHOOSING) {
+      const placedStr = g.placedGemsThisTurn.map(t => `${t.tileX},${t.tileY},${t.code},${t.level}`).join('|');
+      const selStr = g.selectedTower ? `${g.selectedTower.tileX},${g.selectedTower.tileY}` : '';
+      const dupCount = g.getAvailableDuplicateUpgrades().length;
+      const recCount = g.getAvailableRecipes().length;
+      return `CHOOSING_${placedStr}_${selStr}_${dupCount}_${recCount}_${g.gold >= CONFIG.REROLL_COST}`;
+    }
+    if (g.phase === GAME_PHASES.WAVE) {
+      return `WAVE_${g.currentWave}_${g.creeps.length}`;
+    }
+    return g.phase;
+  }
+
+  getInspectorKey() {
+    const t = this.game.selectedTower;
+    if (!t) return 'none';
+    if (t.isSlate) {
+      return `slate_${t.tileX}_${t.tileY}_${this.game.gold >= CONFIG.SLATE_REMOVE_COST}`;
+    }
+    const isTemp = this.game.placedGemsThisTurn.includes(t);
+    return `tower_${t.tileX}_${t.tileY}_${t.code}_${t.level}_${t.isSpecial ? t.specialName : ''}_${t.kills}_${Math.floor(t.totalDamageDealt / 50)}_${t.getEffectiveDamage()}_${t.getEffectiveAttackSpeed()}_${t.getEffectiveRange()}_${isTemp}_${this.game.phase}`;
   }
 
   update() {
@@ -215,8 +388,20 @@ export class UIController {
     }
 
     this.updateHUD();
-    this.updateBottomDock();
-    this.updateInspector();
+
+    // Re-render dock only when state key changes
+    const dockKey = this.getDockKey();
+    if (dockKey !== this.lastDockKey) {
+      this.lastDockKey = dockKey;
+      this.renderBottomDock();
+    }
+
+    // Re-render inspector only when state key changes
+    const inspectorKey = this.getInspectorKey();
+    if (inspectorKey !== this.lastInspectorKey) {
+      this.lastInspectorKey = inspectorKey;
+      this.renderInspector();
+    }
   }
 
   updateHUD() {
@@ -241,7 +426,7 @@ export class UIController {
     }
   }
 
-  updateBottomDock() {
+  renderBottomDock() {
     const dock = this.elBottomDock;
     if (!dock) return;
 
@@ -257,31 +442,24 @@ export class UIController {
             <span class="dock-desc">Click empty tiles to place gems and build your maze!</span>
           </div>
           <div class="dock-actions">
-            <button id="btn-upgrade-chance" class="game-btn primary" ${maxChance || this.game.gold < (nextChance ? nextChance.cost : 999) ? 'disabled' : ''}>
+            <button type="button" id="btn-upgrade-chance" class="game-btn primary" ${maxChance || this.game.gold < (nextChance ? nextChance.cost : 999) ? 'disabled' : ''}>
               ⭐ Upgrade Chances (${maxChance ? 'MAX' : `${nextChance.cost} Gold`})
             </button>
           </div>
         </div>
       `;
-
-      const btnUp = document.getElementById('btn-upgrade-chance');
-      if (btnUp) {
-        btnUp.onclick = () => {
-          this.game.upgradeChance();
-        };
-      }
     } else if (this.game.phase === GAME_PHASES.CHOOSING) {
       const matchingRecipes = this.game.getAvailableRecipes();
       const duplicateCombines = this.game.getAvailableDuplicateUpgrades();
 
-      let combineButtonsHtml = '';
+      let combineHtml = '';
       if (matchingRecipes.length > 0) {
-        combineButtonsHtml += `
+        combineHtml += `
           <div class="combine-box">
-            <span class="combine-title">✨ Special Tower Available!</span>
+            <span class="combine-title">✨ Special Tower!</span>
             <div class="combine-list">
               ${matchingRecipes.map(m => `
-                <button class="game-btn special-craft-btn" data-recipe="${m.name}">
+                <button type="button" class="game-btn special-craft-btn" data-recipe="${m.name}">
                   Combine ${m.name} (${m.def.tier})
                 </button>
               `).join('')}
@@ -291,12 +469,12 @@ export class UIController {
       }
 
       if (duplicateCombines.length > 0) {
-        combineButtonsHtml += `
+        combineHtml += `
           <div class="combine-box duplicate">
             <span class="combine-title">⭐ Duplicate Upgrade!</span>
             <div class="combine-list">
               ${duplicateCombines.map((u, i) => `
-                <button class="game-btn dup-craft-btn" data-dup-idx="${i}">
+                <button type="button" class="game-btn dup-craft-btn" data-dup-idx="${i}">
                   ${u.label}
                 </button>
               `).join('')}
@@ -307,8 +485,9 @@ export class UIController {
 
       const gemCardsHtml = this.game.placedGemsThisTurn.map((gem, idx) => {
         const q = QUALITIES[gem.level] || {};
+        const isSelected = this.game.selectedTower === gem;
         return `
-          <div class="gem-card ${this.game.selectedTower === gem ? 'selected' : ''}" data-idx="${idx}">
+          <div class="gem-card ${isSelected ? 'selected' : ''}" data-idx="${idx}">
             <div class="gem-card-header" style="border-color: ${gem.gemColor}">
               <div class="gem-icon-circle" style="background: ${gem.gemColor}; border-color: ${q.border || '#cbd5e1'}">
                 ${gem.code}${gem.level}
@@ -324,67 +503,28 @@ export class UIController {
               <div>🎯 Rng: <strong>${gem.range}</strong></div>
             </div>
             <div class="gem-card-desc">${gem.description || ''}</div>
-            <button class="game-btn keep-btn" data-idx="${idx}">Keep as Tower</button>
+            <button type="button" class="game-btn keep-btn" data-idx="${idx}">✓ Keep as Tower</button>
           </div>
         `;
       }).join('');
 
       dock.innerHTML = `
         <div class="choosing-dock">
-          ${combineButtonsHtml}
+          <div class="choosing-top-bar">
+            <div class="combine-section">
+              ${combineHtml ? combineHtml : '<span class="choose-hint">Select a gem to keep as your active tower (the other 4 become rocks):</span>'}
+            </div>
+            <div class="dock-actions">
+              <button type="button" id="btn-reroll" class="game-btn secondary" ${this.game.gold < CONFIG.REROLL_COST ? 'disabled' : ''}>
+                🎲 Reroll Gems (${CONFIG.REROLL_COST} Gold)
+              </button>
+            </div>
+          </div>
           <div class="gem-cards-container">
             ${gemCardsHtml}
           </div>
-          <div class="dock-actions bottom-bar">
-            <button id="btn-reroll" class="game-btn secondary" ${this.game.gold < CONFIG.REROLL_COST ? 'disabled' : ''}>
-              🎲 Reroll Gems (${CONFIG.REROLL_COST} Gold)
-            </button>
-          </div>
         </div>
       `;
-
-      // Event handlers for gem cards
-      dock.querySelectorAll('.keep-btn').forEach(btn => {
-        btn.onclick = (e) => {
-          e.stopPropagation();
-          const idx = parseInt(btn.dataset.idx);
-          const chosen = this.game.placedGemsThisTurn[idx];
-          if (chosen) {
-            this.game.keepGem(chosen);
-          }
-        };
-      });
-
-      dock.querySelectorAll('.gem-card').forEach(card => {
-        card.onclick = () => {
-          const idx = parseInt(card.dataset.idx);
-          this.game.selectedTower = this.game.placedGemsThisTurn[idx];
-        };
-      });
-
-      dock.querySelectorAll('.special-craft-btn').forEach(btn => {
-        btn.onclick = () => {
-          const recipeName = btn.dataset.recipe;
-          this.game.craftSpecialTower(recipeName);
-        };
-      });
-
-      dock.querySelectorAll('.dup-craft-btn').forEach(btn => {
-        btn.onclick = () => {
-          const idx = parseInt(btn.dataset.dupIdx);
-          const up = duplicateCombines[idx];
-          if (up) {
-            this.game.applyDuplicateUpgrade(up);
-          }
-        };
-      });
-
-      const btnReroll = document.getElementById('btn-reroll');
-      if (btnReroll) {
-        btnReroll.onclick = () => {
-          this.game.rerollPlacedGems();
-        };
-      }
     } else if (this.game.phase === GAME_PHASES.WAVE) {
       dock.innerHTML = `
         <div class="dock-row wave-status">
@@ -397,7 +537,7 @@ export class UIController {
     }
   }
 
-  updateInspector() {
+  renderInspector() {
     const panel = this.elInspector;
     if (!panel) return;
 
@@ -422,23 +562,19 @@ export class UIController {
         </div>
         <p class="desc">A solid granite obstacle that forces ground creeps to navigate around it.</p>
         <div class="actions">
-          <button id="btn-demolish-slate" class="game-btn danger" ${this.game.gold < CONFIG.SLATE_REMOVE_COST ? 'disabled' : ''}>
+          <button type="button" id="btn-demolish-slate" class="game-btn danger" ${this.game.gold < CONFIG.SLATE_REMOVE_COST ? 'disabled' : ''}>
             Demolish (${CONFIG.SLATE_REMOVE_COST} Gold)
           </button>
         </div>
       `;
-      const btnDemo = document.getElementById('btn-demolish-slate');
-      if (btnDemo) {
-        btnDemo.onclick = () => {
-          this.game.removeSlate(t.tileX, t.tileY);
-        };
-      }
       return;
     }
 
     // Active Gem or Special Tower
     const q = QUALITIES[t.level];
     const tierBadge = t.isSpecial ? `<span class="badge special">${t.tier}</span>` : `<span class="badge tier" style="background: ${q ? q.border : '#334155'}">${q ? q.namePrefix : ''}</span>`;
+    const isUnconfirmedGem = this.game.phase === GAME_PHASES.CHOOSING && this.game.placedGemsThisTurn.includes(t);
+    const unconfirmedIdx = isUnconfirmedGem ? this.game.placedGemsThisTurn.indexOf(t) : -1;
 
     panel.innerHTML = `
       <div class="inspector-header">
@@ -479,6 +615,14 @@ export class UIController {
         <div>Total Damage: <strong>${Math.round(t.totalDamageDealt).toLocaleString()}</strong></div>
         <div>Total Kills: <strong>${t.kills}</strong></div>
       </div>
+
+      ${isUnconfirmedGem ? `
+        <div class="actions" style="margin-top: 8px;">
+          <button type="button" id="btn-inspector-keep" class="game-btn primary keep-btn" data-idx="${unconfirmedIdx}" style="width: 100%; padding: 8px;">
+            ✓ Keep as Active Tower
+          </button>
+        </div>
+      ` : ''}
     `;
   }
 
@@ -534,7 +678,7 @@ export class UIController {
               <h4>${name}</h4>
               <span class="badge ${def.tier.toLowerCase()}">${def.tier}</span>
             </div>
-            ${canCraft ? `<button class="game-btn primary codex-craft-btn" data-craft="${name}">Craft Now</button>` : ''}
+            ${canCraft ? `<button type="button" class="game-btn primary codex-craft-btn" data-craft="${name}">Craft Now</button>` : ''}
           </div>
           <div class="codex-recipe-row">
             <strong>Recipe:</strong> ${recipeBadges}
@@ -549,15 +693,6 @@ export class UIController {
         </div>
       `;
     }).join('');
-
-    this.codexList.querySelectorAll('.codex-craft-btn').forEach(btn => {
-      btn.onclick = () => {
-        const recipeName = btn.dataset.craft;
-        if (this.game.craftSpecialTower(recipeName)) {
-          this.modalCodex.close();
-        }
-      };
-    });
   }
 
   updateCodexMatches() {

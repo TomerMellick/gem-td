@@ -512,7 +512,7 @@ export function findDuplicateUpgrades(placedGems) {
         currentLevel: sample.level,
         targetLevel: sample.level + 2,
         gems: list.slice(0, 4),
-        label: `Quad Combine: 4x ${sample.name} ${sample.level} → Tier ${sample.level + 2}`
+        label: `Quad Combine: 4x ${sample.name} → Tier ${sample.level + 2}`
       });
     } else if (list.length >= 2 && sample.level <= 4) {
       upgrades.push({
@@ -521,7 +521,7 @@ export function findDuplicateUpgrades(placedGems) {
         currentLevel: sample.level,
         targetLevel: sample.level + 1,
         gems: list.slice(0, 2),
-        label: `Pair Combine: 2x ${sample.name} ${sample.level} → Tier ${sample.level + 1}`
+        label: `Pair Combine: 2x ${sample.name} → Tier ${sample.level + 1}`
       });
     }
   }

@@ -225,8 +225,8 @@ body {
   border-radius: 8px;
   box-shadow: 0 0 25px rgba(0, 0, 0, 0.8);
   cursor: crosshair;
-  max-height: calc(100vh - 230px);
-  max-width: calc(100vh - 230px);
+  max-height: calc(100vh - 255px);
+  max-width: calc(100vh - 255px);
   aspect-ratio: 1 / 1;
 }
 
@@ -342,11 +342,12 @@ body {
 
 /* ================= BOTTOM ACTION DOCK ================= */
 #bottom-dock {
-  height: 140px;
+  min-height: 165px;
+  height: auto;
   background: var(--bg-panel);
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--border-color);
-  padding: 10px 24px;
+  padding: 8px 18px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -384,23 +385,45 @@ body {
   flex-direction: column;
   align-items: center;
   width: 100%;
+  max-width: 1100px;
+  gap: 6px;
+}
+
+.choosing-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.combine-section {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.choose-hint {
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd5e1;
 }
 
 .combine-box {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   background: linear-gradient(90deg, rgba(234, 88, 12, 0.2), rgba(168, 85, 247, 0.2));
   border: 1px solid rgba(234, 88, 12, 0.5);
   border-radius: 8px;
-  padding: 4px 14px;
+  padding: 4px 12px;
   animation: pulse-glow 2s infinite ease-in-out;
 }
 
 .combine-box.duplicate {
-  background: rgba(30, 41, 59, 0.8);
-  border-color: var(--primary);
+  background: rgba(30, 41, 59, 0.85);
+  border-color: #a78bfa;
 }
 
 .combine-title {
@@ -416,23 +439,23 @@ body {
 
 .gem-cards-container {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   justify-content: center;
   width: 100%;
 }
 
 .gem-card {
   flex: 1;
-  max-width: 175px;
+  max-width: 190px;
   background: rgba(30, 41, 59, 0.85);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 8px;
+  padding: 7px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
   cursor: pointer;
-  transition: transform 0.15s, border-color 0.15s;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
 .gem-card:hover {
@@ -442,7 +465,8 @@ body {
 
 .gem-card.selected {
   border-color: #fbbf24;
-  box-shadow: 0 0 12px rgba(251, 191, 36, 0.4);
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.5);
+  background: rgba(45, 55, 75, 0.95);
 }
 
 .gem-card-header {
@@ -546,22 +570,57 @@ body {
 
 .game-btn.keep-btn {
   background: linear-gradient(135deg, #059669, #047857);
-  border-color: #34d399;
+  border: 1px solid #34d399;
   width: 100%;
-  padding: 4px;
-  font-size: 10px;
+  padding: 6px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #fff;
+  transition: all 0.15s;
+}
+
+.game-btn.keep-btn:hover {
+  background: linear-gradient(135deg, #10b981, #059669);
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.6);
+  transform: scale(1.02);
 }
 
 .game-btn.special-craft-btn {
   background: linear-gradient(135deg, #ea580c, #c2410c);
-  border-color: #fb923c;
+  border: 1px solid #fb923c;
   font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #fff;
+  transition: all 0.15s;
+}
+
+.game-btn.special-craft-btn:hover {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  box-shadow: 0 0 12px rgba(251, 146, 60, 0.7);
+  transform: scale(1.02);
 }
 
 .game-btn.dup-craft-btn {
   background: linear-gradient(135deg, #7c3aed, #6d28d9);
-  border-color: #a78bfa;
+  border: 1px solid #a78bfa;
   font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #fff;
+  transition: all 0.15s;
+}
+
+.game-btn.dup-craft-btn:hover {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  box-shadow: 0 0 12px rgba(167, 139, 250, 0.7);
+  transform: scale(1.02);
 }
 
 /* ================= MODALS & DIALOGS ================= */
