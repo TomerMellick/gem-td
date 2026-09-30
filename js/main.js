@@ -3,6 +3,7 @@ import { Game } from './game.js';
 import { GameRenderer } from './renderer.js';
 import { UIController } from './ui.js';
 import { AIAgent } from './ai_player.js';
+import { GamepadController } from './gamepad.js';
 import { CONFIG } from './config.js';
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -11,6 +12,10 @@ window.addEventListener('DOMContentLoaded', () => {
     console.error('Game canvas element not found');
     return;
   }
+
+  // ── Mobile/Android Detection ──
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const isCapacitor = typeof window.Capacitor !== 'undefined';
 
   // Set default dimensions: 33 * 24 = 792px
   const targetSize = CONFIG.GRID_WIDTH * CONFIG.DEFAULT_TILE_SIZE;
@@ -22,13 +27,59 @@ window.addEventListener('DOMContentLoaded', () => {
   game.renderer = renderer; // Link renderer for screen shake effects
   const ui = new UIController(game, renderer);
   const ai = new AIAgent(game, ui);
+  const gamepad = new GamepadController(game, ui, renderer);
 
   // Expose to window for live inspection & testing
   window.game = game;
   window.ui = ui;
   window.renderer = renderer;
   window.ai = ai;
+  window.gamepad = gamepad;
   window.CONFIG = CONFIG;
+
+  // ── Responsive Canvas Sizing for Mobile ──
+  function resizeCanvas() {
+    const container = document.getElementById('canvas-container');
+    if (!container) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const availW = Math.floor(containerRect.width - 4);
+    const availH = Math.floor(containerRect.height - 4);
+    if (availW <= 0 || availH <= 0) return;
+
+    const fitSize = Math.min(availW, availH);
+    canvas.style.width = fitSize + 'px';
+    canvas.style.height = fitSize + 'px';
+  }
+
+  // Initial resize + observe container changes
+  resizeCanvas();
+  if (typeof ResizeObserver !== 'undefined') {
+    const container = document.getElementById('canvas-container');
+    if (container) {
+      const ro = new ResizeObserver(() => resizeCanvas());
+      ro.observe(container);
+    }
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  // ── Request Fullscreen on Mobile (Android WebView) ──
+  if (isMobile || isCapacitor) {
+    const requestFullscreen = () => {
+      const el = document.documentElement;
+      if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+
+      // Lock to landscape if Screen Orientation API is available
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').catch(() => {});
+      }
+    };
+
+    // Auto-request on first touch interaction
+    document.addEventListener('touchstart', requestFullscreen, { once: true });
+    document.addEventListener('click', requestFullscreen, { once: true });
+  }
 
   // AI Autoplay UI Controls
   const btnAi = document.getElementById('btn-ai');
@@ -66,6 +117,9 @@ window.addEventListener('DOMContentLoaded', () => {
     const rawDt = (now - lastTime) / 1000;
     lastTime = now;
 
+    // Poll gamepad controller
+    gamepad.update(now);
+
     // Tick AI agent
     ai.tick(now);
 
@@ -88,3 +142,4 @@ window.addEventListener('DOMContentLoaded', () => {
 
   requestAnimationFrame(gameLoop);
 });
+

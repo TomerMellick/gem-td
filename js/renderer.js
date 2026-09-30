@@ -72,6 +72,12 @@ export class GameRenderer {
     this.showRanges = true;
     this.showGrid = true;
 
+    // Performance: detect mobile for reduced effects on low-power GPUs (e.g., Snapdragon 662)
+    this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (this.isMobile) {
+      this.showGrid = false; // Skip grid lines to save draw calls
+    }
+
     // Screen shake state
     this.shakeIntensity = 0;
     this.shakeDuration = 0;
@@ -823,15 +829,78 @@ export class GameRenderer {
     const ts = this.tileSize;
     const px = x * ts;
     const py = y * ts;
+    const cx = px + ts / 2;
+    const cy = py + ts / 2;
 
     ctx.save();
     const canPlace = game.getHoverCanPlace();
-    ctx.fillStyle = canPlace ? 'rgba(74, 222, 128, 0.3)' : 'rgba(239, 68, 68, 0.3)';
-    ctx.strokeStyle = canPlace ? '#4ade80' : '#ef4444';
-    ctx.lineWidth = 2;
+    const existingTower = game.towerGrid[y] ? game.towerGrid[y][x] : null;
+
+    let themeColor = '#4ade80';
+    let fillColor = 'rgba(74, 222, 128, 0.22)';
+    if (existingTower) {
+      themeColor = '#38bdf8';
+      fillColor = 'rgba(56, 189, 248, 0.25)';
+    } else if (!canPlace) {
+      themeColor = '#ef4444';
+      fillColor = 'rgba(239, 68, 68, 0.22)';
+    }
+
+    // Soft tile highlight
+    ctx.fillStyle = fillColor;
     ctx.fillRect(px, py, ts, ts);
-    ctx.strokeRect(px, py, ts, ts);
+
+    // Glowing Animated Corner Brackets
+    const pulse = Math.sin(this.time * 6) * 1.5;
+    const cLen = ts * 0.32;
+    const offset = 1;
+
+    ctx.strokeStyle = themeColor;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = themeColor;
+    ctx.shadowBlur = 6 + pulse;
+
+    // Top-left
+    ctx.beginPath();
+    ctx.moveTo(px + offset, py + offset + cLen);
+    ctx.lineTo(px + offset, py + offset);
+    ctx.lineTo(px + offset + cLen, py + offset);
+    ctx.stroke();
+
+    // Top-right
+    ctx.beginPath();
+    ctx.moveTo(px + ts - offset - cLen, py + offset);
+    ctx.lineTo(px + ts - offset, py + offset);
+    ctx.lineTo(px + ts - offset, py + offset + cLen);
+    ctx.stroke();
+
+    // Bottom-left
+    ctx.beginPath();
+    ctx.moveTo(px + offset, py + ts - offset - cLen);
+    ctx.lineTo(px + offset, py + ts - offset);
+    ctx.lineTo(px + offset + cLen, py + ts - offset);
+    ctx.stroke();
+
+    // Bottom-right
+    ctx.beginPath();
+    ctx.moveTo(px + ts - offset - cLen, py + ts - offset);
+    ctx.lineTo(px + ts - offset, py + ts - offset);
+    ctx.lineTo(px + ts - offset, py + ts - offset - cLen);
+    ctx.stroke();
+
+    // Center precision dot
+    ctx.fillStyle = themeColor;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.restore();
+
+    // If hovering an existing tower, also render range preview
+    if (existingTower && !game.selectedTower) {
+      this.drawTowerRange(ctx, existingTower);
+    }
   }
 
   drawTowerRange(ctx, tower) {

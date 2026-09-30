@@ -1,0 +1,38 @@
+# Node dependencies
+node_modules/
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# Build artifacts
+www/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Testing, scratch & screenshots
+scratch/
+scratch_edge/
+shot*.png
+*screenshot*.png
+
+# Android build outputs & local config
+.gradle/
+build/
+local.properties
+.cxx/
+.externalNativeBuild/
+
+# OS / Editor artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

@@ -414,8 +414,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 10px;
+  padding: 4px;
   position: relative;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 #game-canvas {
@@ -424,9 +427,10 @@ body {
   border-radius: 8px;
   box-shadow: 0 0 25px rgba(0, 0, 0, 0.8);
   cursor: crosshair;
-  max-height: calc(100vh - 255px);
-  max-width: calc(100vh - 255px);
+  max-height: 100%;
+  max-width: 100%;
   aspect-ratio: 1 / 1;
+  object-fit: contain;
 }
 
 /* ================= SIDE INSPECTOR ================= */
@@ -898,17 +902,24 @@ body {
 
 /* ================= BOTTOM ACTION DOCK ================= */
 #bottom-dock {
-  min-height: 165px;
+  min-height: 48px;
   height: auto;
   background: var(--bg-panel);
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--border-color);
-  padding: 8px 18px;
+  padding: 6px 18px;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10;
   flex-shrink: 0;
+  transition: min-height 0.2s ease, padding 0.2s ease;
+}
+
+#bottom-dock:has(.choosing-dock),
+#bottom-dock.dock-choosing {
+  min-height: 155px;
+  padding: 8px 14px;
 }
 
 .dock-row {
@@ -1842,5 +1853,665 @@ body {
 
   50% {
     box-shadow: 0 0 16px rgba(234, 88, 12, 0.6);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE / ANDROID LANDSCAPE RESPONSIVE STYLES
+   Optimized for Mangmi Air X (5.5" 1080p 16:9 landscape)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Prevent rubber-band scrolling and pinch-zoom on mobile */
+html, body {
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* Safe area padding for devices with notches/system bars */
+body {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* ── Landscape + Small Screen (handheld gaming) ── */
+@media screen and (max-height: 600px), screen and (orientation: landscape) and (max-height: 1080px) and (max-width: 1920px) {
+  /* Compact header for landscape handheld */
+  #game-header {
+    padding: 4px 10px;
+    gap: 8px;
+    min-height: 0;
+    flex-wrap: nowrap;
+  }
+
+  .logo h1 {
+    font-size: 14px;
+    letter-spacing: 1px;
+  }
+
+  .logo .gem-icon {
+    font-size: 16px;
+  }
+
+  .wave-info-box {
+    padding: 2px 8px;
+  }
+
+  .hud-main-val {
+    font-size: 11px;
+  }
+
+  .hud-sub-val {
+    font-size: 9px;
+  }
+
+  .phase-banner {
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 12px;
+  }
+
+  .badge {
+    font-size: 8px;
+    padding: 1px 5px;
+  }
+
+  .stat-pill {
+    padding: 3px 8px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .speed-btn {
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .icon-btn {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+
+  .control-group {
+    gap: 4px;
+  }
+
+  .header-left, .header-right {
+    gap: 6px;
+  }
+
+  /* Hide the header center on very small screens */
+  .header-center {
+    display: none;
+  }
+
+  /* Canvas fills available height in landscape */
+  #game-main {
+    flex: 1;
+    min-height: 0;
+  }
+
+  #canvas-container {
+    padding: 4px;
+    flex: 1;
+  }
+
+  #game-canvas {
+    max-height: 100%;
+    max-width: 100%;
+    aspect-ratio: 1 / 1;
+    border-width: 1px;
+    border-radius: 6px;
+  }
+
+  /* Compact side inspector for 16:9 widescreen handhelds */
+  .side-panel {
+    width: 215px;
+    display: flex;
+    padding: 8px 10px;
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  /* Compact bottom dock */
+  #bottom-dock {
+    padding: 4px 8px;
+    max-height: 40vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dock-row {
+    gap: 6px;
+    padding: 4px 0;
+  }
+
+  .dock-title {
+    font-size: 11px;
+  }
+
+  .dock-desc {
+    font-size: 9px;
+  }
+
+  .wave-stat-strip {
+    font-size: 9px;
+    gap: 6px;
+  }
+
+  /* Gem cards in choosing phase — horizontal scroll */
+  .gem-cards-container {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 6px;
+    padding-bottom: 4px;
+  }
+
+  .gem-card {
+    min-width: 130px;
+    flex-shrink: 0;
+    padding: 6px;
+  }
+
+  .gem-card-header {
+    padding: 4px;
+  }
+
+  .gem-card-stats {
+    font-size: 10px;
+  }
+
+  .gem-card-desc {
+    font-size: 9px;
+  }
+
+  .keep-btn, .game-btn {
+    padding: 5px 10px;
+    font-size: 10px;
+    /* Ensure minimum touch target size (48px recommended by Android) */
+    min-height: 36px;
+  }
+
+  /* Dialogs: smaller and touch-friendly */
+  .game-dialog {
+    max-width: 85vw;
+    max-height: 85vh;
+  }
+
+  .dialog-header {
+    padding: 8px 12px;
+  }
+
+  .dialog-header h2 {
+    font-size: 14px;
+  }
+
+  .dialog-scroll-content {
+    max-height: 55vh;
+  }
+
+  .shop-grid {
+    gap: 6px;
+  }
+
+  .shop-card {
+    padding: 8px;
+  }
+
+  /* AI status card compact */
+  .ai-status-card {
+    padding: 4px 12px;
+  }
+
+  .ai-thought-bubble {
+    font-size: 10px;
+    padding: 3px 8px;
+  }
+}
+
+/* ── Handheld Landscape Optimization (Mangmi Air X: 5.5" 1080p, ~454px viewport height) ── */
+@media screen and (orientation: landscape) and (max-height: 520px) {
+  #game-header {
+    padding: 3px 10px;
+    height: 38px;
+    gap: 8px;
+  }
+
+  .logo {
+    gap: 5px;
+  }
+
+  .logo h1 {
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+
+  .logo .gem-icon {
+    font-size: 16px;
+  }
+
+  .wave-info-box {
+    padding: 2px 8px;
+    border-left-width: 2px;
+  }
+
+  .hud-main-val {
+    font-size: 11px;
+  }
+
+  .hud-sub-val {
+    font-size: 9px;
+  }
+
+  /* Clear the center area for the Mangmi Air X hardware performance overlay */
+  .header-center {
+    display: none !important;
+  }
+
+  .header-right {
+    gap: 5px;
+  }
+
+  .stat-pill {
+    padding: 2px 7px;
+    font-size: 11px;
+    gap: 4px;
+    border-radius: 12px;
+  }
+
+  .control-group {
+    gap: 4px;
+  }
+
+  .speed-controls {
+    border-radius: 4px;
+  }
+
+  .speed-btn {
+    padding: 2px 6px !important;
+    font-size: 10px !important;
+    min-width: 26px !important;
+    min-height: 28px !important;
+  }
+
+  .icon-btn {
+    padding: 3px 7px !important;
+    font-size: 10.5px !important;
+    min-height: 28px !important;
+    min-width: unset !important;
+  }
+
+  /* AI status card: ultra-compact floating toast */
+  .ai-status-card {
+    padding: 2px 10px;
+    height: 26px;
+  }
+
+  .ai-card-content {
+    gap: 8px;
+  }
+
+  .ai-badge-title {
+    font-size: 9px;
+    padding: 1px 5px;
+    letter-spacing: 0.8px;
+  }
+
+  .ai-thought-bubble {
+    font-size: 10px;
+    padding: 2px 8px;
+  }
+
+  .ai-thought-icon {
+    font-size: 12px;
+  }
+
+  .ai-speed-controls {
+    gap: 3px;
+  }
+
+  .ai-speed-label {
+    display: none;
+  }
+
+  .ai-speed-btn {
+    font-size: 9px !important;
+    padding: 2px 6px !important;
+    min-height: 22px !important;
+    min-width: unset !important;
+  }
+
+  /* Main area & Canvas Container */
+  #game-main {
+    flex: 1;
+    overflow: hidden;
+  }
+
+  #canvas-container {
+    padding: 2px;
+  }
+
+  /* Side Inspector Panel */
+  .side-panel {
+    width: 230px;
+    padding: 8px 10px;
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .empty-inspector {
+    padding: 10px;
+    font-size: 10px;
+  }
+
+  .inspector-header {
+    gap: 8px;
+    padding-bottom: 6px;
+  }
+
+  .inspector-header h3 {
+    font-size: 13px;
+  }
+
+  .gem-badge {
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+  }
+
+  .inspector-stats-grid {
+    gap: 4px;
+  }
+
+  .stat-card {
+    padding: 4px 6px;
+  }
+
+  .stat-card .label {
+    font-size: 8.5px;
+  }
+
+  .stat-card .val {
+    font-size: 12px;
+  }
+
+  .inspector-section h4 {
+    font-size: 9.5px;
+    margin-bottom: 3px;
+  }
+
+  .inspector-section .desc {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .combat-record, .mvp-section, .combine-ready-section, .runes-section {
+    padding: 6px 8px;
+    gap: 4px;
+  }
+
+  .inspector-combine-btn {
+    padding: 5px 8px !important;
+    min-height: 28px !important;
+  }
+
+  .combine-btn-title {
+    font-size: 10px;
+  }
+
+  .combine-btn-sub {
+    font-size: 8.5px;
+  }
+
+  /* Bottom Dock: Compact during gameplay, expand during gem choosing */
+  #bottom-dock {
+    min-height: 36px;
+    padding: 2px 14px;
+  }
+
+  .dock-row {
+    gap: 8px;
+  }
+
+  .dock-title {
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .wave-stat-strip {
+    font-size: 10px;
+    gap: 4px 10px;
+  }
+
+  .dock-desc {
+    font-size: 9.5px;
+  }
+
+  #btn-upgrade-chance, #btn-reroll {
+    padding: 3px 8px !important;
+    font-size: 10px !important;
+    min-height: 28px !important;
+  }
+
+  #bottom-dock:has(.choosing-dock),
+  #bottom-dock.dock-choosing {
+    min-height: 112px;
+    max-height: 125px;
+    padding: 2px 8px;
+  }
+
+  .choosing-dock {
+    gap: 3px;
+  }
+
+  .choosing-top-bar {
+    gap: 6px;
+  }
+
+  .choose-hint {
+    font-size: 9.5px;
+  }
+
+  .combine-box {
+    padding: 2px 6px;
+    border-radius: 4px;
+    gap: 6px;
+  }
+
+  .combine-title {
+    font-size: 9.5px;
+  }
+
+  .special-craft-btn, .dup-craft-btn {
+    padding: 2px 6px !important;
+    font-size: 9px !important;
+    min-height: 24px !important;
+  }
+
+  .gem-cards-container {
+    gap: 5px;
+  }
+
+  .gem-card {
+    padding: 3px 5px;
+    max-width: 130px;
+    gap: 2px;
+    border-radius: 6px;
+  }
+
+  .gem-card-header {
+    gap: 4px;
+  }
+
+  .gem-icon-circle {
+    width: 18px;
+    height: 18px;
+    font-size: 8px;
+    border-width: 1px;
+  }
+
+  .gem-card-title .name {
+    font-size: 9px;
+    max-width: 75px;
+  }
+
+  .gem-card-title .quality {
+    font-size: 7.5px;
+  }
+
+  .gem-card-stats {
+    font-size: 8px;
+  }
+
+  .gem-card-desc {
+    display: none;
+  }
+
+  .keep-btn {
+    padding: 2px 5px !important;
+    font-size: 8.5px !important;
+    min-height: 24px !important;
+  }
+}
+
+/* ── Touch-friendly defaults for desktop/tablet ── */
+@media (pointer: coarse) and (min-height: 521px) {
+  .speed-btn,
+  .icon-btn,
+  .game-btn,
+  .shop-buy-btn,
+  .keep-btn,
+  .dup-craft-btn,
+  .special-craft-btn,
+  .codex-craft-btn,
+  .inspector-combine-btn,
+  .ai-speed-btn,
+  .codex-filter-btn,
+  .shop-filter-btn {
+    min-height: 40px;
+    min-width: 40px;
+  }
+
+  .modal-close {
+    width: 40px;
+    height: 40px;
+    font-size: 24px;
+  }
+
+  .codex-row,
+  .shop-card {
+    padding: 10px;
+  }
+}
+
+/* ================= GAMEPAD / CONTROLLER PROMPTS ================= */
+.gamepad-prompt-bar {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7), 0 0 14px rgba(56, 189, 248, 0.25);
+  border-radius: 20px;
+  padding: 3px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 100;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.gamepad-prompt-bar.hidden {
+  display: none !important;
+}
+
+.gp-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.gp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 900;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.gp-btn.a {
+  background: #22c55e;
+  color: #052e16;
+}
+
+.gp-btn.b {
+  background: #ef4444;
+  color: #450a0a;
+}
+
+.gp-btn.x {
+  background: #3b82f6;
+  color: #172554;
+}
+
+.gp-btn.y {
+  background: #eab308;
+  color: #422006;
+}
+
+.gp-btn.shoulder {
+  width: auto;
+  border-radius: 4px;
+  padding: 1px 5px;
+  background: #475569;
+  color: #f8fafc;
+  font-size: 8.5px;
+}
+
+.gp-btn.menu {
+  width: auto;
+  border-radius: 4px;
+  padding: 1px 5px;
+  background: #334155;
+  color: #cbd5e1;
+  font-size: 8px;
+}
+
+.gp-badge {
+  color: #38bdf8;
+  font-size: 11px;
+}
+
+/* ── Portrait fallback (rotate device prompt) ── */
+@media screen and (orientation: portrait) and (max-width: 768px) {
+  body::before {
+    content: '📱 Please rotate your device to landscape mode for the best experience!';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #090d16;
+    color: #38bdf8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+    z-index: 99999;
+    padding: 40px;
+    font-family: var(--font-main);
   }
 }

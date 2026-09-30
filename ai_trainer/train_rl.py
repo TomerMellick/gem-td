@@ -228,7 +228,7 @@ def train():
                     rec_name = avail_recipes[0]
                     env.craft_special_tower(rec_name, chosen_coord_idx=best_round_gem)
                     recipes_crafted += 1
-                    reward += 35.0  # Big bonus for special tower!
+                    reward += 60.0  # Big bonus for special tower!
                 else:
                     env.keep_gem(best_round_gem)
             elif action == 6:

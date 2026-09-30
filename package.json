@@ -8,9 +8,20 @@
     "play:watch": "node play_game.js --watch",
     "play:headed": "node play_game.js --headed",
     "play:wave25": "node play_game.js --target-wave 25",
-    "test": "node play_game.js"
+    "test": "node play_game.js",
+    "build:www": "powershell -ExecutionPolicy Bypass -File build-www.ps1",
+    "cap:sync": "npx cap sync android",
+    "cap:build": "npm run build:www && npx cap sync android",
+    "cap:open": "npx cap open android"
   },
   "dependencies": {
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/android": "^8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.0.0"
+  },
+  "optionalDependencies": {
     "playwright-core": "./package"
   }
 }

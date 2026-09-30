@@ -73,6 +73,42 @@ export class UIController {
       }
     });
 
+    // ── Mobile Touch Support ──
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (e.touches.length > 0) {
+        const touch = e.touches[0];
+        const fakeEvent = this._touchToMouseEvent(touch);
+        this.onCanvasMouseMove(fakeEvent);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (e.touches.length > 0) {
+        const touch = e.touches[0];
+        const fakeEvent = this._touchToMouseEvent(touch);
+        this.onCanvasMouseMove(fakeEvent);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      if (e.changedTouches.length > 0) {
+        const touch = e.changedTouches[0];
+        const fakeEvent = this._touchToMouseEvent(touch);
+        this.onCanvasClick(fakeEvent);
+      }
+    }, { passive: false });
+
+    // Prevent page-level touch scrolling/zooming during gameplay
+    document.addEventListener('touchmove', (e) => {
+      if (e.target.closest('#game-canvas') || e.target.closest('#bottom-dock')) {
+        // Allow scrolling inside dialogs, but prevent on canvas and dock
+      }
+    }, { passive: true });
+
+
     // Permanent event delegation on Bottom Dock
     this.elBottomDock.addEventListener('click', (e) => this.onDockClick(e));
     this.elBottomDock.addEventListener('dblclick', (e) => this.onDockDblClick(e));
@@ -215,6 +251,17 @@ export class UIController {
       this.game.previousSpeed = this.game.gameSpeed;
       this.setSpeed(0);
     }
+  }
+
+  // Convert a Touch object to a mouse-event-like object for reuse
+  _touchToMouseEvent(touch) {
+    return {
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+      target: touch.target,
+      preventDefault: () => {},
+      stopPropagation: () => {}
+    };
   }
 
   getTileAtEvent(e) {
